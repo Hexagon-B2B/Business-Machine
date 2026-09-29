@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
 const LIFECYCLE = ['prospect', 'active', 'repeat', 'dormant', 'lost']
+const RESEARCH = ['NOT_RESEARCHED', 'IN_PROGRESS', 'RESEARCHED', 'NEEDS_UPDATE']
 const ROLES = ['Decision Maker', 'Procurement', 'IT', 'Finance', 'Technical Evaluator', 'Influencer', 'End User', 'Other']
 
 export default function CompanyDetail({ id, go }) {
@@ -17,10 +18,12 @@ export default function CompanyDetail({ id, go }) {
   const [showTask, setShowTask] = useState(false)
   const [showMeeting, setShowMeeting] = useState(false)
   const [showOpp, setShowOpp] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const [cForm, setCForm] = useState({ full_name: '', job_title: '', role: '', email: '', phone: '' })
   const [tForm, setTForm] = useState({ title: '', description: '', priority: 'medium', due_at: '', contact_id: '' })
   const [mForm, setMForm] = useState({ type: 'call', subject: '', description: '', outcome: '', next_action: '', next_action_due_at: '', contact_id: '' })
   const [oForm, setOForm] = useState({ name: '', stage: 'qualification', deal_size: '', requirement_description: '', primary_contact_id: '' })
+  const [eForm, setEForm] = useState({})
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { if (id) load() }, [id])
@@ -42,6 +45,46 @@ export default function CompanyDetail({ id, go }) {
     setOpps(o.data || [])
     setSignals(s.data || [])
     setLoading(false)
+  }
+
+  function openEdit() {
+    setEForm({
+      name: company.name || '',
+      legal_name: company.legal_name || '',
+      website: company.website || '',
+      industry: company.industry || '',
+      city: company.city || '',
+      country: company.country || '',
+      lifecycle_status: company.lifecycle_status || 'prospect',
+      research_status: company.research_status || 'NOT_RESEARCHED',
+      notes: company.notes || '',
+      employee_count: company.employee_count || company.enrichment_employee_count || ''
+    })
+    setShowEdit(true)
+  }
+
+  async function saveCompany(e) {
+    e.preventDefault()
+    if (!eForm.name.trim()) return
+    setSaving(true)
+    const payload = {
+      name: eForm.name.trim(),
+      legal_name: eForm.legal_name || null,
+      website: eForm.website || null,
+      industry: eForm.industry || null,
+      city: eForm.city || null,
+      country: eForm.country || null,
+      lifecycle_status: eForm.lifecycle_status,
+      research_status: eForm.research_status,
+      notes: eForm.notes || null,
+      employee_count: eForm.employee_count ? Number(eForm.employee_count) : null
+    }
+    const { error } = await supabase.from('companies').update(payload).eq('id', id)
+    setSaving(false)
+    if (!error) {
+      setShowEdit(false)
+      setCompany({ ...company, ...payload })
+    } else alert(error.message)
   }
 
   async function updateLifecycle(val) {
@@ -152,7 +195,6 @@ export default function CompanyDetail({ id, go }) {
     <div style={{ padding: 28 }}>
       <button className="btn" style={{ marginBottom: 14 }} onClick={() => go('companies')}>← All Companies</button>
 
-      {/* Header */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -167,6 +209,7 @@ export default function CompanyDetail({ id, go }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn" onClick={openEdit}>Edit Company</button>
             <button className="btn" onClick={() => setShowContact(true)}>+ Contact</button>
             <button className="btn" onClick={() => setShowTask(true)}>+ Task</button>
             <button className="btn" onClick={() => setShowMeeting(true)}>+ Call / Meeting</button>
@@ -177,11 +220,11 @@ export default function CompanyDetail({ id, go }) {
           <div><strong>Website:</strong> {company.website ? <a href={company.website.startsWith('http') ? company.website : 'https://' + company.website} target="_blank" rel="noreferrer">{company.website}</a> : '—'}</div>
           <div><strong>Location:</strong> {[company.city, company.country].filter(Boolean).join(', ') || '—'}</div>
           <div><strong>Employees:</strong> {company.employee_count || company.enrichment_employee_count || '—'}</div>
+          <div><strong>Legal Name:</strong> {company.legal_name || '—'}</div>
         </div>
         {company.notes && <p style={{ marginTop: 10, fontSize: 13, color: '#475569' }}>{company.notes}</p>}
       </div>
 
-      {/* Next Actions */}
       {nextActions.length > 0 && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #2563eb' }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#1e40af' }}>NEXT ACTIONS</h3>
@@ -195,7 +238,6 @@ export default function CompanyDetail({ id, go }) {
         </div>
       )}
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
         {['overview', 'contacts', 'tasks', 'meetings', 'opportunities', 'signals'].map(t => (
           <button key={t} className="btn" onClick={() => setTab(t)}
@@ -308,7 +350,38 @@ export default function CompanyDetail({ id, go }) {
         </div>
       )}
 
-      {/* Modals */}
+      {showEdit && (
+        <Modal title="Edit Company" onClose={() => setShowEdit(false)}>
+          <form onSubmit={saveCompany}>
+            <Field label="Company Name *"><input className="input" value={eForm.name} onChange={e => setEForm({...eForm, name: e.target.value})} required /></Field>
+            <Field label="Legal Name"><input className="input" value={eForm.legal_name} onChange={e => setEForm({...eForm, legal_name: e.target.value})} /></Field>
+            <Field label="Website"><input className="input" value={eForm.website} onChange={e => setEForm({...eForm, website: e.target.value})} placeholder="https://" /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Industry"><input className="input" value={eForm.industry} onChange={e => setEForm({...eForm, industry: e.target.value})} /></Field>
+              <Field label="Employees"><input className="input" type="number" value={eForm.employee_count} onChange={e => setEForm({...eForm, employee_count: e.target.value})} /></Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="City"><input className="input" value={eForm.city} onChange={e => setEForm({...eForm, city: e.target.value})} /></Field>
+              <Field label="Country"><input className="input" value={eForm.country} onChange={e => setEForm({...eForm, country: e.target.value})} /></Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Lifecycle">
+                <select className="input" value={eForm.lifecycle_status} onChange={e => setEForm({...eForm, lifecycle_status: e.target.value})}>
+                  {LIFECYCLE.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="Research Status">
+                <select className="input" value={eForm.research_status} onChange={e => setEForm({...eForm, research_status: e.target.value})}>
+                  {RESEARCH.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field label="Notes"><textarea className="input" rows={3} value={eForm.notes} onChange={e => setEForm({...eForm, notes: e.target.value})} /></Field>
+            <Actions saving={saving} onCancel={() => setShowEdit(false)} label="Save Changes" />
+          </form>
+        </Modal>
+      )}
+
       {showContact && (
         <Modal title="Add Contact" onClose={() => setShowContact(false)}>
           <form onSubmit={addContact}>
@@ -403,7 +476,7 @@ export default function CompanyDetail({ id, go }) {
 function Modal({ title, children, onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div className="card" style={{ width: 460, maxHeight: '90vh', overflow: 'auto' }}>
+      <div className="card" style={{ width: 480, maxHeight: '90vh', overflow: 'auto' }}>
         <h2 style={{ fontSize: 17, marginBottom: 16 }}>{title}</h2>
         {children}
       </div>

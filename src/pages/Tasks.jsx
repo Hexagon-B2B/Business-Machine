@@ -1,21 +1,39 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { PAGE_SIZE } from '../constants'
+import { PageHead, FilterTabs, DataTable, Badge } from '../ui'
 
 export default function Tasks({ go }) {
   const [tasks, setTasks] = useState([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('open')
+  const [sortKey, setSortKey] = useState('due_at')
+  const [sortDir, setSortDir] = useState('asc')
+  const [page, setPage] = useState(1)
 
-  useEffect(() => { load() }, [filter])
+  useEffect(() => { load() }, [filter, page, sortKey, sortDir])
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('tasks').select('id, title, description, priority, status, due_at, company_id, companies(name)').order('due_at', { ascending: true }).limit(100)
+    const from = (page - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+    let q = supabase.from('tasks')
+      .select('id, title, description, priority, status, due_at, company_id, companies(name)', { count: 'exact' })
+      .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
+      .range(from, to)
     if (filter === 'open') q = q.in('status', ['open', 'in_progress'])
     else if (filter === 'done') q = q.eq('status', 'done')
-    const { data } = await q
+    const { data, count } = await q
     setTasks(data || [])
+    setTotal(count || 0)
     setLoading(false)
+  }
+
+  function onSort(key) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+    setPage(1)
   }
 
   async function markDone(id) {
@@ -23,46 +41,28 @@ export default function Tasks({ go }) {
     load()
   }
 
+  const columns = [
+    { key: 'title', label: 'Title', bold: true },
+    { key: 'company', label: 'Company', render: t => t.companies?.name ? (
+      <button style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }} onClick={e => { e.stopPropagation(); go('company', t.company_id) }}>{t.companies.name}</button>
+    ) : '—' },
+    { key: 'priority', label: 'Priority', render: t => <Badge tone={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'yellow' : 'gray'}>{t.priority}</Badge> },
+    { key: 'status', label: 'Status', render: t => <Badge tone="blue">{t.status}</Badge> },
+    { key: 'due_at', label: 'Due', render: t => t.due_at ? new Date(t.due_at).toLocaleDateString() : '—' },
+    { key: 'action', label: '', render: t => t.status !== 'done' ? <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={e => { e.stopPropagation(); markDone(t.id) }}>Done</button> : null },
+  ]
+
   return (
     <div style={{ padding: 28 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 22 }}>Tasks</h1>
-          <p style={{ color: '#64748b', fontSize: 14 }}>Create tasks from a Company for best results</p>
-        </div>
+      <PageHead eyebrow="Work" title="Tasks" subtitle="Create tasks from a Company. Every task should answer What, Why, Who, When.">
         <button className="btn primary" onClick={() => go('companies')}>Go to Companies →</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {[['open', 'Open'], ['done', 'Done'], ['all', 'All']].map(([f, label]) => (
-          <button key={f} className="btn" onClick={() => setFilter(f)}
-            style={{ background: filter === f ? '#2563eb' : '#fff', color: filter === f ? '#fff' : '#0f172a' }}>{label}</button>
-        ))}
-      </div>
-
-      {loading ? <div className="loading">Loading...</div> : tasks.length === 0 ? (
-        <div className="empty">No tasks. Open a Company and create a task from there.</div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table className="table">
-            <thead><tr><th>Title</th><th>Company</th><th>Priority</th><th>Status</th><th>Due</th><th></th></tr></thead>
-            <tbody>
-              {tasks.map(t => (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 600 }}>{t.title}</td>
-                  <td>{t.companies?.name ? (
-                    <button style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
-                      onClick={() => go('company', t.company_id)}>{t.companies.name}</button>
-                  ) : '—'}</td>
-                  <td><span className={`badge ${t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'yellow' : 'gray'}`}>{t.priority}</span></td>
-                  <td><span className="badge blue">{t.status}</span></td>
-                  <td>{t.due_at ? new Date(t.due_at).toLocaleDateString() : '—'}</td>
-                  <td>{t.status !== 'done' && <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => markDone(t.id)}>Done</button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      </PageHead>
+      <FilterTabs value={filter} onChange={v => { setFilter(v); setPage(1) }}
+        options={[{ value: 'open', label: 'Open' }, { value: 'done', label: 'Done' }, { value: 'all', label: 'All' }]} />
+      {loading ? <div className="loading">Loading...</div> : (
+        <DataTable columns={columns} rows={tasks} sortKey={sortKey} sortDir={sortDir} onSort={onSort}
+          page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage}
+          empty="No tasks. Open a Company and create a task from there." />
       )}
     </div>
   )

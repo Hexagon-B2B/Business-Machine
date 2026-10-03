@@ -1,3 +1,4 @@
+import { DEFAULT_TRIGGER_CONFIG } from './constants'
 /**
  * Daily trigger / enrichment work engine.
  * Creates a small ranked set of system tasks. Idempotent via metadata.trigger_key.
@@ -5,8 +6,25 @@
  * Log a Signal when evidence is found.
  */
 
-const MAX_NEW = 15
 const FIT = /it|software|manufactur|bank|infra|construct|pharma|auto|hospital|health|education|govern|energy|oil|telecom|logistics|warehouse|hotel|real estate|engineer|securit|print|office|network|data.?cent|facility/i
+
+export function getTriggerConfig() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('hexagon_trigger_config')
+      if (raw) return { ...DEFAULT_TRIGGER_CONFIG, ...JSON.parse(raw) }
+    }
+  } catch (_) {}
+  return { ...DEFAULT_TRIGGER_CONFIG }
+}
+
+export function saveTriggerConfig(cfg) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('hexagon_trigger_config', JSON.stringify(cfg))
+    }
+  } catch (_) {}
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -85,6 +103,7 @@ async function insertTask(supabase, row) {
 }
 
 export async function runDailyTriggerScan(supabase) {
+  const cfg = getTriggerConfig()
   const wk = weekKey()
   const created = []
   const skipped = []
@@ -129,7 +148,7 @@ export async function runDailyTriggerScan(supabase) {
     candidates.push(item)
   }
 
-  for (const s of (sigs.data || [])) {
+  for (const s of (cfg.enableSignals ? (sigs.data || []) : [])) {
     const name = s.companies?.name || 'company'
     add({
       key: `signal:${s.id}`,
@@ -142,7 +161,7 @@ export async function runDailyTriggerScan(supabase) {
     })
   }
 
-  for (const o of (opps.data || [])) {
+  for (const o of (cfg.enableQuotation ? (opps.data || []) : [])) {
     add({
       key: `quote:${o.id}`,
       type: 'quotation',
@@ -154,7 +173,7 @@ export async function runDailyTriggerScan(supabase) {
     })
   }
 
-  for (const m of (meets.data || [])) {
+  for (const m of (cfg.enableMeeting ? (meets.data || []) : [])) {
     add({
       key: `meeting:${m.id}`,
       type: 'meeting',
@@ -177,31 +196,31 @@ export async function runDailyTriggerScan(supabase) {
     const life = (c.lifecycle_status || 'prospect')
     if (life === 'lost' || life === 'dormant') continue
 
-    if (thin) {
+    if (cfg.enableMissingDetails && thin) {
       add({
         key: `missing:${c.id}`,
         type: 'missing_details',
-        score: 55 + (fit ? 12 : 0) + (n >= 200 ? 10 : 0) + (noPeople ? 8 : 0) + (noDM ? 5 : 0),
+        score: 55 + (fit ? 12 : 0) + (n >= cfg.employeeThreshold ? 10 : 0) + (noPeople ? 8 : 0) + (noDM ? 5 : 0),
         company_id: c.id,
         title: `Get missing details: ${c.name}`,
-        priority: (n >= 200 || fit || noPeople) ? 'high' : 'medium',
+        priority: (n >= cfg.employeeThreshold || fit || noPeople) ? 'high' : 'medium',
         description: `Missing: ${[!c.website && 'website', !c.industry && 'industry', !c.city && 'city', noPeople && 'contact', noDM && 'decision maker'].filter(Boolean).join(', ')}.\nReach out or research, then update the company record.\n${newsLinks(c.name)}`,
       })
     }
 
-    if (n >= 200) {
+    if (cfg.enableEmployeeCount && n >= cfg.employeeThreshold) {
       add({
         key: `employees:${c.id}:${wk}`,
         type: 'employee_count',
-        score: n >= 1000 ? 80 : 65,
+        score: n >= cfg.employeeHighThreshold ? 80 : 65,
         company_id: c.id,
         title: `Scale review (employees ${n}): ${c.name}`,
-        priority: n >= 1000 ? 'high' : 'medium',
+        priority: n >= cfg.employeeHighThreshold ? 'high' : 'medium',
         description: `Employee count ${n} suggests infrastructure / workspace / security demand. Identify IT, procurement and a live requirement.\n${newsLinks(c.name)}`,
       })
     }
 
-    if (fit && (c.research_status === 'NOT_RESEARCHED' || !c.research_status)) {
+    if (cfg.enableIndustry && fit && (c.research_status === 'NOT_RESEARCHED' || !c.research_status)) {
       add({
         key: `industry:${c.id}`,
         type: 'industry',
@@ -213,11 +232,11 @@ export async function runDailyTriggerScan(supabase) {
       })
     }
 
-    if (c.research_status === 'NEEDS_UPDATE' || c.research_status === 'NOT_RESEARCHED') {
+    if (cfg.enableNewsHiringFunding && (c.research_status === 'NEEDS_UPDATE' || c.research_status === 'NOT_RESEARCHED')) {
       add({
         key: `newscheck:${c.id}:${wk}`,
         type: 'news_hiring_funding',
-        score: 35 + (fit ? 8 : 0) + (n >= 200 ? 8 : 0),
+        score: 35 + (fit ? 8 : 0) + (n >= cfg.employeeThreshold ? 8 : 0),
         company_id: c.id,
         title: `Check news / hiring / funding: ${c.name}`,
         priority: 'medium',
@@ -227,7 +246,7 @@ export async function runDailyTriggerScan(supabase) {
   }
 
   candidates.sort((a, b) => b.score - a.score)
-  const picked = candidates.slice(0, MAX_NEW)
+  const picked = candidates.slice(0, cfg.maxNew)
 
   for (const item of picked) {
     const error = await insertTask(supabase, item)

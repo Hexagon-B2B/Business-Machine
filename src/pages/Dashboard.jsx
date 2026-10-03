@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { runDailyTriggerScan } from '../triggers'
+import { runDailyTriggerScan, getTriggerConfig, saveTriggerConfig } from '../triggers'
+import { DEFAULT_TRIGGER_CONFIG } from '../constants'
 import { PageHead, Badge } from '../ui'
 
 export default function Dashboard({ go }) {
@@ -12,6 +13,9 @@ export default function Dashboard({ go }) {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
+  const [cfg, setCfg] = useState(() => getTriggerConfig())
+  const [showCfg, setShowCfg] = useState(false)
+  const [cfgMsg, setCfgMsg] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -49,58 +53,113 @@ export default function Dashboard({ go }) {
     await load()
   }
 
-  if (loading) return <div className="loading">Loading Action Centre...</div>
+  function saveCfg() {
+    saveTriggerConfig(cfg)
+    setCfgMsg('Criteria saved. Next Generate uses these rules.')
+    setTimeout(() => setCfgMsg(''), 3500)
+  }
 
-  const cards = [
-    { label: 'Companies', value: stats.companies, page: 'companies' },
-    { label: 'Contacts', value: stats.contacts, page: 'companies' },
-    { label: 'Open Tasks', value: stats.openTasks, page: 'tasks' },
-    { label: 'Meetings & Calls', value: stats.meetings, page: 'meetings' },
-    { label: 'Open Opportunities', value: stats.openOpps, page: 'opportunities' },
-    { label: 'Research Queue', value: stats.research, page: 'research' },
-  ]
+  function resetCfg() {
+    setCfg({ ...DEFAULT_TRIGGER_CONFIG })
+    saveTriggerConfig(DEFAULT_TRIGGER_CONFIG)
+    setCfgMsg('Reset to defaults.')
+    setTimeout(() => setCfgMsg(''), 3000)
+  }
 
-  function taskRow(t, color) {
+  function taskRow(t, accent) {
     return (
       <div key={t.id} style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13, cursor: 'pointer' }}
-        onClick={() => t.company_id && go('company', t.company_id)}>
+        onClick={() => go('tasks')}>
         <div style={{ fontWeight: 600 }}>{t.title}</div>
-        <div style={{ color }}>
-          <Badge tone={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'yellow' : 'gray'}>{t.priority}</Badge>
-          {' '}{t.companies?.name || ''}
-          {t.due_at && ` · ${new Date(t.due_at).toLocaleDateString()}`}
+        <div style={{ color: '#64748b', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {t.companies?.name && <span style={{ color: accent }}>{t.companies.name}</span>}
+          {t.due_at && <span>Due {new Date(t.due_at).toLocaleDateString()}</span>}
+          <Badge tone={t.priority === 'high' ? 'red' : 'gray'}>{t.priority}</Badge>
         </div>
       </div>
     )
   }
 
+  if (loading) return <div className="loading">Loading…</div>
+
+  const cards = [
+    { label: 'Companies', value: stats.companies, page: 'companies' },
+    { label: 'Contacts', value: stats.contacts, page: 'companies' },
+    { label: 'Open Tasks', value: stats.openTasks, page: 'tasks' },
+    { label: 'Meetings', value: stats.meetings, page: 'meetings' },
+    { label: 'Open Opps', value: stats.openOpps, page: 'opportunities' },
+    { label: 'Research queue', value: stats.research, page: 'research' },
+  ]
+
   return (
     <div style={{ padding: 28 }}>
       <PageHead eyebrow="Daily Command Centre" title="Action Centre" subtitle="Scheduled work you created, plus trigger work the system prepares from employees, industry, missing details, news/hiring/funding and quotations.">
-        <button className="btn primary" disabled={running} onClick={generate}>
+        <button type="button" className="btn" onClick={() => setShowCfg(s => !s)}>
+          {showCfg ? 'Hide criteria' : 'Trigger criteria'}
+        </button>
+        <button type="button" className="btn primary" disabled={running} onClick={generate}>
           {running ? 'Generating…' : "Generate today's trigger work"}
         </button>
       </PageHead>
 
-      <div className="notice" style={{ marginBottom: 16 }}>
-        Trigger work is capped at 15 new tasks per run and will not duplicate an open task. It does not scrape LinkedIn. It creates reach-out / check tasks with search links. Log a Signal when you find evidence.
-      </div>
-
-      {result && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <strong>Run complete:</strong> created {result.created} · already open {result.skipped} · considered {result.considered}
-          {result.errors?.length > 0 && (
-            <div style={{ color: '#b91c1c', marginTop: 8, fontSize: 13 }}>
-              {result.errors[0].includes('task_code_seq')
-                ? 'Task sequence permission is still missing. Run the SQL I gave you, then click Generate again.'
-                : result.errors.join(' | ')}
-            </div>
-          )}
-          {result.items?.map((i, n) => <div key={n} style={{ fontSize: 13, marginTop: 4 }}><Badge tone="blue">{i.type}</Badge> {i.title}</div>)}
+      {showCfg && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1e40af' }}>
+          <h2 style={{ fontSize: 14, marginBottom: 8 }}>Trigger criteria (saved on this browser)</h2>
+          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            Controls what Generate creates each day. Change limits and which signal types run, then Generate again.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 12 }}>
+            <label style={{ fontSize: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Max new tasks / run</div>
+              <input className="input" type="number" min={1} max={50} value={cfg.maxNew}
+                onChange={e => setCfg({ ...cfg, maxNew: Number(e.target.value) || 15 })} />
+            </label>
+            <label style={{ fontSize: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Employee threshold</div>
+              <input className="input" type="number" min={0} value={cfg.employeeThreshold}
+                onChange={e => setCfg({ ...cfg, employeeThreshold: Number(e.target.value) || 0 })} />
+            </label>
+            <label style={{ fontSize: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>High employee threshold</div>
+              <input className="input" type="number" min={0} value={cfg.employeeHighThreshold}
+                onChange={e => setCfg({ ...cfg, employeeHighThreshold: Number(e.target.value) || 0 })} />
+            </label>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12, fontSize: 13 }}>
+            {[
+              ['enableMissingDetails', 'Missing details'],
+              ['enableEmployeeCount', 'Employee scale'],
+              ['enableIndustry', 'Industry fit'],
+              ['enableNewsHiringFunding', 'News / hiring / funding'],
+              ['enableSignals', 'Signals'],
+              ['enableQuotation', 'Quotation follow-up'],
+              ['enableMeeting', 'Meeting next-action'],
+            ].map(([key, label]) => (
+              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!cfg[key]} onChange={e => setCfg({ ...cfg, [key]: e.target.checked })} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="btn primary" onClick={saveCfg}>Save criteria</button>
+            <button type="button" className="btn" onClick={resetCfg}>Reset defaults</button>
+            {cfgMsg && <span style={{ fontSize: 12, color: '#065f46' }}>{cfgMsg}</span>}
+          </div>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
+      {result && (
+        <div className="notice" style={{ marginBottom: 16, background: result.errors?.length ? '#fef2f2' : '#ecfdf5', borderColor: result.errors?.length ? '#fecaca' : '#a7f3d0' }}>
+          {result.errors?.length
+            ? (String(result.errors[0]).includes('task_code') || String(result.errors[0]).includes('sequence')
+              ? 'Task sequence permission is still missing. Run the SQL I gave you, then click Generate again.'
+              : result.errors.join('; '))
+            : `Run complete: created ${result.created || 0} · already open ${result.skipped || 0} · considered ${result.considered || 0}`}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 16 }}>
         {cards.map(c => (
           <div key={c.label} className="card" style={{ cursor: 'pointer' }} onClick={() => go(c.page)}>
             <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{c.label}</div>

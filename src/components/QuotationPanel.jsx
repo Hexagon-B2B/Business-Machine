@@ -4,11 +4,10 @@ import {
   emptyItem, lineTotal, itemsTotal, loadQuotesForOpp, saveQuotation, updateQuoteStatus, QUOTE_STATUS,
 } from '../lib/quotations'
 
-/** Lean quotation UI inside an opportunity. Create V1, revise V2+, mark sent / no-regret. */
+/** Lean quotation UI. Works with SQL tables or opportunity.metadata.quotes fallback. */
 export default function QuotationPanel({ opportunity, onTotalChange }) {
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [missingTable, setMissingTable] = useState(false)
   const [error, setError] = useState('')
   const [mode, setMode] = useState(null)
   const [baseQuote, setBaseQuote] = useState(null)
@@ -27,11 +26,10 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     const { quotes: q, error: err } = await loadQuotesForOpp(opportunity.id)
     setLoading(false)
     if (err) {
-      if (/relation|does not exist|schema cache/i.test(err.message)) setMissingTable(true)
-      else setError(err.message)
+      setError(err.message)
       setQuotes([]); return
     }
-    setMissingTable(false); setQuotes(q)
+    setQuotes(q)
     if (q[0] && onTotalChange) onTotalChange(q[0].total_value)
   }
 
@@ -82,28 +80,13 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       items: form.items, supersedePreviousId: mode === 'revise' && baseQuote ? baseQuote.id : null,
     })
     setSaving(false)
-    if (err) {
-      if (/relation|does not exist|schema cache/i.test(err.message)) {
-        setMissingTable(true)
-        setError('Quotations tables not found. Run sql/001_quotations_and_activity.sql in Supabase.')
-      } else setError(err.message)
-      return
-    }
+    if (err) { setError(err.message); return }
     setMode(null); setBaseQuote(null); load()
   }
 
   async function setStatus(id, status) {
-    const { error: err } = await updateQuoteStatus(id, status)
+    const { error: err } = await updateQuoteStatus(id, status, opportunity.id)
     if (err) setError(err.message); else load()
-  }
-
-  if (missingTable) {
-    return (
-      <div className="notice" style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#9a3412' }}>
-        <strong>One-time setup required.</strong> Run <code>sql/001_quotations_and_activity.sql</code> in Supabase SQL Editor, then refresh.
-        Creates <code>quotations</code>, <code>quotation_items</code>, and <code>activity_log</code>.
-      </div>
-    )
   }
 
   const total = itemsTotal(form.items)

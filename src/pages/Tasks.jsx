@@ -57,12 +57,9 @@ export default function Tasks({ go }) {
 
   async function updateTaskStatus(id, status) {
     setBusyId(id)
-    // DB check constraint: use 'completed' (not 'done')
     const dbStatus = status === 'done' ? 'completed' : status
     const payload = { status: dbStatus }
-    if (dbStatus === 'completed') {
-      payload.completed_at = new Date().toISOString()
-    }
+    if (dbStatus === 'completed') payload.completed_at = new Date().toISOString()
     let { error } = await supabase.from('tasks').update(payload).eq('id', id)
     if (error && /completed_at|column/i.test(error.message)) {
       ;({ error } = await supabase.from('tasks').update({ status: dbStatus }).eq('id', id))
@@ -102,7 +99,7 @@ export default function Tasks({ go }) {
     if (!edit?.title?.trim()) return
     setSaving(true)
     let status = edit.status || 'open'
-    if (status === 'done') status = 'completed' // DB constraint
+    if (status === 'done') status = 'completed'
     const payload = {
       title: edit.title.trim(),
       description: edit.description || null,
@@ -110,9 +107,7 @@ export default function Tasks({ go }) {
       status,
       due_at: edit.due_at || null,
     }
-    if (payload.status === 'completed') {
-      payload.completed_at = new Date().toISOString()
-    }
+    if (payload.status === 'completed') payload.completed_at = new Date().toISOString()
     let { error } = await supabase.from('tasks').update(payload).eq('id', edit.id)
     if (error && /completed_at|column/i.test(error.message)) {
       delete payload.completed_at
@@ -228,7 +223,6 @@ export default function Tasks({ go }) {
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="Priority">
-                <select className="input" value={edit.status === 'done' ? 'completed' : (edit.status || 'open')} onChange={e => setEdit({ ...edit, status: e.target.value })} style={{ display: 'none' }} />
                 <select className="input" value={edit.priority || 'medium'} onChange={e => setEdit({ ...edit, priority: e.target.value })}>
                   {TASK_PRIORITY.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { OPP_STAGES, OPP_STAGE_META, PAGE_SIZE, oppStageLabel, isOppOpen } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
+import QuotationPanel from '../components/QuotationPanel'
+import { logActivity } from '../lib/activityLog'
 
 function stageTone(stage) {
   if (stage === 'won') return 'green'
@@ -11,17 +13,9 @@ function stageTone(stage) {
 }
 
 const emptyForm = {
-  company_id: '',
-  name: '',
-  stage: 'requirement',
-  deal_size: '',
-  expected_close_date: '',
-  requirement_description: '',
-  solution: '',
-  next_action: '',
-  next_action_due: '',
-  primary_contact_id: '',
-  lost_reason: '',
+  company_id: '', name: '', stage: 'requirement', deal_size: '', expected_close_date: '',
+  requirement_description: '', solution: '', next_action: '', next_action_due: '',
+  primary_contact_id: '', lost_reason: '',
 }
 
 export default function Opportunities({ go }) {
@@ -67,7 +61,6 @@ export default function Opportunities({ go }) {
       .order('created_at', { ascending: false })
       .limit(300)
     setAllForBoard(board.data || [])
-
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     let q = supabase.from('opportunities')
@@ -78,9 +71,7 @@ export default function Opportunities({ go }) {
     else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
     else if (stageFilter !== 'all') q = q.eq('stage', stageFilter)
     const { data, count } = await q
-    setItems(data || [])
-    setTotal(count || 0)
-    setLoading(false)
+    setItems(data || []); setTotal(count || 0); setLoading(false)
   }
 
   function onSort(key) {
@@ -100,17 +91,17 @@ export default function Opportunities({ go }) {
   }
 
   async function moveStage(id, stage) {
-    const payload = { stage }
     if (stage === 'lost' && selected?.id === id && !selected.lost_reason) {
       showMsg('Capture lost reason when moving to Lost.')
       setSelected(s => s && s.id === id ? { ...s, stage: 'lost' } : s)
       return
     }
-    const { error } = await supabase.from('opportunities').update(payload).eq('id', id)
+    const { error } = await supabase.from('opportunities').update({ stage }).eq('id', id)
     if (error) showMsg('Stage update failed: ' + error.message)
     else {
       showMsg('Stage → ' + oppStageLabel(stage))
       if (selected?.id === id) setSelected(s => ({ ...s, stage }))
+      await logActivity({ entityType: 'opportunity', entityId: id, action: 'stage_change', summary: `Stage → ${stage}` })
       load()
     }
   }
@@ -119,8 +110,7 @@ export default function Opportunities({ go }) {
     e.preventDefault()
     if (!selected) return
     if (selected.stage === 'lost' && !(selected.lost_reason || '').trim()) {
-      showMsg('Lost reason is required when stage is Lost.')
-      return
+      showMsg('Lost reason is required when stage is Lost.'); return
     }
     setSaving(true)
     const meta = {
@@ -145,11 +135,7 @@ export default function Opportunities({ go }) {
       delete payload.primary_contact_id
       ;({ error } = await supabase.from('opportunities').update(payload).eq('id', selected.id))
     }
-    if (error) {
-      setSaving(false)
-      showMsg('Save failed: ' + error.message)
-      return
-    }
+    if (error) { setSaving(false); showMsg('Save failed: ' + error.message); return }
 
     if (selected.next_action && selected.next_action_due && selected.company_id) {
       await supabase.from('tasks').insert({
@@ -157,18 +143,18 @@ export default function Opportunities({ go }) {
         title: `Opp next action: ${selected.next_action}`.slice(0, 200),
         description: `From opportunity: ${selected.name}\nStage: ${selected.stage}\n${selected.requirement_description || ''}`,
         priority: selected.stage === 'quotation' || selected.stage === 'negotiation' ? 'high' : 'medium',
-        status: 'open',
-        due_at: selected.next_action_due,
-        state: 'active',
-        source: 'user',
+        status: 'open', due_at: selected.next_action_due, state: 'active', source: 'user',
         metadata: { origin: 'opportunity', opportunity_id: selected.id },
       }).then(() => {})
     }
 
     setSaving(false)
-    setSelected(null)
-    showMsg('Opportunity saved.')
-    load()
+    await logActivity({
+      entityType: 'opportunity', entityId: selected.id, action: 'opportunity_saved',
+      summary: `${selected.name} · stage ${selected.stage}`,
+      payload: { stage: selected.stage, deal_size: selected.deal_size },
+    })
+    setSelected(null); showMsg('Opportunity saved.'); load()
   }
 
   async function createOpp(e) {
@@ -177,24 +163,15 @@ export default function Opportunities({ go }) {
     if (!form.name.trim()) { showMsg('Opportunity name is required.'); return }
     if (!form.requirement_description.trim()) { showMsg('Capture the requirement — that is what makes this a real opportunity.'); return }
     setSaving(true)
-    const meta = {
-      next_action: form.next_action || null,
-      next_action_due: form.next_action_due || null,
-      solution: form.solution || null,
-    }
+    const meta = { next_action: form.next_action || null, next_action_due: form.next_action_due || null, solution: form.solution || null }
     const payload = {
-      company_id: form.company_id,
-      name: form.name.trim(),
-      stage: form.stage || 'requirement',
-      deal_size: form.deal_size ? Number(form.deal_size) : null,
-      currency: 'INR',
+      company_id: form.company_id, name: form.name.trim(), stage: form.stage || 'requirement',
+      deal_size: form.deal_size ? Number(form.deal_size) : null, currency: 'INR',
       expected_close_date: form.expected_close_date || null,
       requirement_description: form.requirement_description.trim(),
       pain_points: form.solution || null,
       opportunity_code: 'OPP-' + Date.now().toString(36).toUpperCase(),
-      state: 'active',
-      metadata: meta,
-      primary_contact_id: form.primary_contact_id || null,
+      state: 'active', metadata: meta, primary_contact_id: form.primary_contact_id || null,
     }
     let { error } = await supabase.from('opportunities').insert(payload)
     if (error && /primary_contact|column/i.test(error.message)) {
@@ -202,14 +179,8 @@ export default function Opportunities({ go }) {
       ;({ error } = await supabase.from('opportunities').insert(payload))
     }
     setSaving(false)
-    if (error) {
-      showMsg('Create failed: ' + error.message)
-      return
-    }
-    setShowCreate(false)
-    setForm({ ...emptyForm })
-    showMsg('Opportunity created.')
-    load()
+    if (error) { showMsg('Create failed: ' + error.message); return }
+    setShowCreate(false); setForm({ ...emptyForm }); showMsg('Opportunity created.'); load()
   }
 
   const columns = [
@@ -229,28 +200,22 @@ export default function Opportunities({ go }) {
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead
-        eyebrow="Commercial"
-        title="Opportunities"
-        subtitle="Buyer-progress stages: Requirement → Qualification → Discovery → Solution → Quotation → Negotiation → Decision → Won / Lost"
-      >
+      <PageHead eyebrow="Commercial" title="Opportunities"
+        subtitle="Buyer-progress stages: Requirement → Qualification → Discovery → Solution → Quotation → Negotiation → Decision → Won / Lost">
         <button type="button" className="btn" onClick={() => go('companies')}>Companies</button>
         <button type="button" className="btn primary" onClick={() => { setForm({ ...emptyForm }); setShowCreate(true) }}>+ New opportunity</button>
       </PageHead>
 
       {flash && (
-        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') || flash.includes('required') || flash.includes('Select') || flash.includes('Capture') ? '#fef2f2' : '#ecfdf5', color: flash.includes('failed') || flash.includes('required') || flash.includes('Select') || flash.includes('Capture') ? '#991b1b' : '#065f46' }}>
-          {flash}
-        </div>
+        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') || flash.includes('required') || flash.includes('Select') || flash.includes('Capture') ? '#fef2f2' : '#ecfdf5', color: flash.includes('failed') || flash.includes('required') || flash.includes('Select') || flash.includes('Capture') ? '#991b1b' : '#065f46' }}>{flash}</div>
       )}
 
       <div className="notice" style={{ marginBottom: 14 }}>
-        <strong>Discipline:</strong> An opportunity is not a company and not a task. It is a live commercial case with a requirement, a proposed solution, value, timing, and a next action.
-        Quotation is a real stage (quote shared) — not a separate finance module in V1. Daily Generate creates follow-up tasks for opportunities stuck in Quotation.
+        <strong>Discipline:</strong> An opportunity is a live commercial case with requirement, solution, value, timing, and next action.
+        Open a deal → create item-wise quotations (V1, V2…) without a heavy CPQ.
       </div>
 
-      <FilterTabs value={view} onChange={setView}
-        options={[{ value: 'pipeline', label: 'Pipeline board' }, { value: 'list', label: 'List' }]} />
+      <FilterTabs value={view} onChange={setView} options={[{ value: 'pipeline', label: 'Pipeline board' }, { value: 'list', label: 'List' }]} />
 
       {view === 'pipeline' && (
         <>
@@ -266,12 +231,8 @@ export default function Opportunities({ go }) {
                 const colVal = list.reduce((s, o) => s + (Number(o.deal_size) || 0), 0)
                 return (
                   <div className="stage" key={st} style={{ minWidth: 180 }}>
-                    <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                      {meta?.label || st} ({list.length})
-                    </h4>
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-                      {meta?.pct}% · ₹{colVal.toLocaleString()}
-                    </div>
+                    <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>{meta?.label || st} ({list.length})</h4>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{meta?.pct}% · ₹{colVal.toLocaleString()}</div>
                     {list.length === 0 && <div className="empty" style={{ padding: 10, fontSize: 12 }}>None</div>}
                     {list.map(o => (
                       <div className="opp-card" key={o.id} onClick={() => openEdit(o)} style={{ cursor: 'pointer' }}>
@@ -292,16 +253,10 @@ export default function Opportunities({ go }) {
       {view === 'list' && (
         <>
           <FilterTabs value={stageFilter} onChange={v => { setStageFilter(v); setPage(1) }}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'open', label: 'Open' },
-              { value: 'closed', label: 'Won / Lost' },
-              ...OPP_STAGES.map(s => ({ value: s, label: oppStageLabel(s) })),
-            ]} />
+            options={[{ value: 'all', label: 'All' }, { value: 'open', label: 'Open' }, { value: 'closed', label: 'Won / Lost' }, ...OPP_STAGES.map(s => ({ value: s, label: oppStageLabel(s) }))]} />
           {loading ? <div className="loading">Loading…</div> : (
             <DataTable columns={columns} rows={items} sortKey={sortKey} sortDir={sortDir} onSort={onSort}
-              page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage}
-              onRowClick={openEdit}
+              page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} onRowClick={openEdit}
               empty="No opportunities. Create from here or from a Company." />
           )}
         </>
@@ -311,61 +266,31 @@ export default function Opportunities({ go }) {
         <Modal title="New opportunity" onClose={() => setShowCreate(false)} width={560}>
           <form onSubmit={createOpp}>
             <Field label="Company *">
-              <select className="input" required value={form.company_id}
-                onChange={e => setForm({ ...form, company_id: e.target.value, primary_contact_id: '' })}>
+              <select className="input" required value={form.company_id} onChange={e => setForm({ ...form, company_id: e.target.value, primary_contact_id: '' })}>
                 <option value="">Select company…</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
             <Field label="Opportunity name *">
-              <input className="input" required value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Workspace fit-out · Phase 1" />
+              <input className="input" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Workspace fit-out · Phase 1" />
             </Field>
             <Field label="Requirement *">
-              <textarea className="input" rows={3} required value={form.requirement_description}
-                onChange={e => setForm({ ...form, requirement_description: e.target.value })}
-                placeholder="What does the buyer need? What problem are we solving?" />
+              <textarea className="input" rows={3} required value={form.requirement_description} onChange={e => setForm({ ...form, requirement_description: e.target.value })} placeholder="What does the buyer need?" />
             </Field>
             <Field label="Proposed solution / Hexagon fit">
-              <textarea className="input" rows={2} value={form.solution}
-                onChange={e => setForm({ ...form, solution: e.target.value })}
-                placeholder="How we address it (products, scope, approach)" />
+              <textarea className="input" rows={2} value={form.solution} onChange={e => setForm({ ...form, solution: e.target.value })} />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="Stage">
                 <select className="input" value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
-                  {OPP_STAGES.filter(s => isOppOpen(s)).map(s => (
-                    <option key={s} value={s}>{oppStageLabel(s)} ({OPP_STAGE_META[s]?.pct}%)</option>
-                  ))}
+                  {OPP_STAGES.filter(s => isOppOpen(s)).map(s => <option key={s} value={s}>{oppStageLabel(s)} ({OPP_STAGE_META[s]?.pct}%)</option>)}
                 </select>
               </Field>
               <Field label="Est. value (INR)">
-                <input className="input" type="number" value={form.deal_size}
-                  onChange={e => setForm({ ...form, deal_size: e.target.value })} />
+                <input className="input" type="number" value={form.deal_size} onChange={e => setForm({ ...form, deal_size: e.target.value })} />
               </Field>
               <Field label="Expected close">
-                <input className="input" type="date" value={form.expected_close_date}
-                  onChange={e => setForm({ ...form, expected_close_date: e.target.value })} />
-              </Field>
-            </div>
-            <Field label="Primary contact">
-              <select className="input" value={form.primary_contact_id}
-                onChange={e => setForm({ ...form, primary_contact_id: e.target.value })}
-                disabled={!form.company_id}>
-                <option value="">— Optional —</option>
-                {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.role ? ` (${c.role})` : ''}</option>)}
-              </select>
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
-              <Field label="Next action">
-                <input className="input" value={form.next_action}
-                  onChange={e => setForm({ ...form, next_action: e.target.value })}
-                  placeholder="e.g. Send site survey proposal" />
-              </Field>
-              <Field label="Next action due">
-                <input className="input" type="date" value={form.next_action_due}
-                  onChange={e => setForm({ ...form, next_action_due: e.target.value })} />
+                <input className="input" type="date" value={form.expected_close_date} onChange={e => setForm({ ...form, expected_close_date: e.target.value })} />
               </Field>
             </div>
             <Actions saving={saving} onCancel={() => setShowCreate(false)} label="Create opportunity" />
@@ -374,7 +299,7 @@ export default function Opportunities({ go }) {
       )}
 
       {selected && (
-        <Modal title={selected.name} onClose={() => setSelected(null)} width={560}>
+        <Modal title={selected.name} onClose={() => setSelected(null)} width={720}>
           <form onSubmit={saveOpp}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button type="button" className="btn" onClick={() => go('company', selected.company_id)}>Open company →</button>
@@ -386,59 +311,38 @@ export default function Opportunities({ go }) {
               <input className="input" value={selected.name || ''} onChange={e => setSelected({ ...selected, name: e.target.value })} />
             </Field>
             <Field label="Stage">
-              <select className="input" value={selected.stage || 'requirement'}
-                onChange={e => setSelected({ ...selected, stage: e.target.value })}>
-                {OPP_STAGES.map(s => (
-                  <option key={s} value={s}>{oppStageLabel(s)} ({OPP_STAGE_META[s]?.pct}%)</option>
-                ))}
+              <select className="input" value={selected.stage || 'requirement'} onChange={e => setSelected({ ...selected, stage: e.target.value })}>
+                {OPP_STAGES.map(s => <option key={s} value={s}>{oppStageLabel(s)} ({OPP_STAGE_META[s]?.pct}%)</option>)}
               </select>
             </Field>
             {OPP_STAGE_META[selected.stage]?.exit && (
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: -6, marginBottom: 10 }}>
-                Exit criteria: {OPP_STAGE_META[selected.stage].exit}
-              </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: -6, marginBottom: 10 }}>Exit criteria: {OPP_STAGE_META[selected.stage].exit}</div>
             )}
             <Field label="Requirement">
-              <textarea className="input" rows={2} value={selected.requirement_description || ''}
-                onChange={e => setSelected({ ...selected, requirement_description: e.target.value })} />
+              <textarea className="input" rows={2} value={selected.requirement_description || ''} onChange={e => setSelected({ ...selected, requirement_description: e.target.value })} />
             </Field>
             <Field label="Proposed solution / Hexagon fit">
-              <textarea className="input" rows={2} value={selected.solution || ''}
-                onChange={e => setSelected({ ...selected, solution: e.target.value })}
-                placeholder="Offer, scope, why we win" />
+              <textarea className="input" rows={2} value={selected.solution || ''} onChange={e => setSelected({ ...selected, solution: e.target.value })} />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Estimated value (INR)">
-                <input className="input" type="number" value={selected.deal_size || ''}
-                  onChange={e => setSelected({ ...selected, deal_size: e.target.value })} />
+                <input className="input" type="number" value={selected.deal_size || ''} onChange={e => setSelected({ ...selected, deal_size: e.target.value })} />
               </Field>
               <Field label="Expected close">
-                <input className="input" type="date" value={selected.expected_close_date || ''}
-                  onChange={e => setSelected({ ...selected, expected_close_date: e.target.value })} />
+                <input className="input" type="date" value={selected.expected_close_date || ''} onChange={e => setSelected({ ...selected, expected_close_date: e.target.value })} />
               </Field>
             </div>
-            <Field label="Primary contact">
-              <select className="input" value={selected.primary_contact_id || ''}
-                onChange={e => setSelected({ ...selected, primary_contact_id: e.target.value })}>
-                <option value="">— Optional —</option>
-                {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.role ? ` (${c.role})` : ''}</option>)}
-              </select>
-            </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
               <Field label="Next action">
-                <input className="input" value={selected.next_action || ''}
-                  onChange={e => setSelected({ ...selected, next_action: e.target.value })} />
+                <input className="input" value={selected.next_action || ''} onChange={e => setSelected({ ...selected, next_action: e.target.value })} />
               </Field>
               <Field label="Next due (creates task on save)">
-                <input className="input" type="date" value={selected.next_action_due || ''}
-                  onChange={e => setSelected({ ...selected, next_action_due: e.target.value })} />
+                <input className="input" type="date" value={selected.next_action_due || ''} onChange={e => setSelected({ ...selected, next_action_due: e.target.value })} />
               </Field>
             </div>
             {selected.stage === 'lost' && (
               <Field label="Lost reason *">
-                <input className="input" required value={selected.lost_reason || ''}
-                  onChange={e => setSelected({ ...selected, lost_reason: e.target.value })}
-                  placeholder="Price, competitor, timing, no budget, no decision…" />
+                <input className="input" required value={selected.lost_reason || ''} onChange={e => setSelected({ ...selected, lost_reason: e.target.value })} />
               </Field>
             )}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -447,9 +351,15 @@ export default function Opportunities({ go }) {
                   onClick={() => moveStage(selected.id, s)}>{oppStageLabel(s)}</button>
               ))}
               <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => moveStage(selected.id, 'won')}>Won</button>
-              <button type="button" className="btn danger" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => { setSelected({ ...selected, stage: 'lost' }) }}>Lost</button>
+              <button type="button" className="btn danger" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setSelected({ ...selected, stage: 'lost' })}>Lost</button>
             </div>
-            <div className="notice">Quotation = commercial quote in play. Billing stays outside CRM. Saving with next action + due date also creates a task.</div>
+
+            <QuotationPanel
+              opportunity={selected}
+              onTotalChange={v => { if (v != null && v !== '') setSelected(s => ({ ...s, deal_size: v })) }}
+            />
+
+            <div className="notice">Quotes are item-wise and versioned. Billing stays outside CRM. Next action + due creates a task on save.</div>
             <Actions saving={saving} onCancel={() => setSelected(null)} label="Save opportunity" />
           </form>
         </Modal>

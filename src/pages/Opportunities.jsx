@@ -113,8 +113,9 @@ export default function Opportunities({ go }) {
       showMsg('Lost reason is required when stage is Lost.'); return
     }
     setSaving(true)
+    const { data: latest } = await supabase.from('opportunities').select('metadata').eq('id', selected.id).single()
     const meta = {
-      ...(selected.metadata || {}),
+      ...(latest?.metadata || selected.metadata || {}),
       next_action: selected.next_action || null,
       next_action_due: selected.next_action_due || null,
       solution: selected.solution || null,
@@ -211,8 +212,7 @@ export default function Opportunities({ go }) {
       )}
 
       <div className="notice" style={{ marginBottom: 14 }}>
-        <strong>Discipline:</strong> An opportunity is a live commercial case with requirement, solution, value, timing, and next action.
-        Open a deal → create item-wise quotations (V1, V2…) without a heavy CPQ.
+        <strong>Discipline:</strong> Open a deal → create item-wise quotations (base + upgrades, transfer / margin % / customer price).
       </div>
 
       <FilterTabs value={view} onChange={setView} options={[{ value: 'pipeline', label: 'Pipeline board' }, { value: 'list', label: 'List' }]} />
@@ -353,15 +353,14 @@ export default function Opportunities({ go }) {
               <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => moveStage(selected.id, 'won')}>Won</button>
               <button type="button" className="btn danger" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setSelected({ ...selected, stage: 'lost' })}>Lost</button>
             </div>
+            <div className="notice">Next action + due creates a task when you save the opportunity. Quotes are saved separately below.</div>
+            <Actions saving={saving} onCancel={() => setSelected(null)} label="Save opportunity" />
+          </form>
 
             <QuotationPanel
               opportunity={selected}
               onTotalChange={v => { if (v != null && v !== '') setSelected(s => ({ ...s, deal_size: v })) }}
             />
-
-            <div className="notice">Quotes are item-wise and versioned. Billing stays outside CRM. Next action + due creates a task on save.</div>
-            <Actions saving={saving} onCancel={() => setSelected(null)} label="Save opportunity" />
-          </form>
         </Modal>
       )}
     </div>

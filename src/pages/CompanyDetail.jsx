@@ -201,17 +201,19 @@ export default function CompanyDetail({ id, go }) {
 
   async function addOpp(e) {
     e.preventDefault()
-    if (!oForm.name.trim()) return
+    if (!oForm.name.trim()) { alert('Opportunity name is required.'); return }
+    if (!(oForm.requirement_description || '').trim()) { alert('Capture the requirement — that is what makes this a real opportunity.'); return }
     setSaving(true)
+    const meta = { next_action: oForm.next_action || null, solution: oForm.solution || null }
     const { error } = await supabase.from('opportunities').insert({
       company_id: id, primary_contact_id: oForm.primary_contact_id || null,
-      name: oForm.name.trim(), stage: oForm.stage,
+      name: oForm.name.trim(), stage: oForm.stage || 'requirement',
       deal_size: oForm.deal_size ? Number(oForm.deal_size) : null, currency: 'INR',
-      requirement_description: oForm.requirement_description || null,
+      requirement_description: oForm.requirement_description.trim(),
       pain_points: oForm.solution || null,
       expected_close_date: oForm.expected_close_date || null,
       opportunity_code: 'OPP-' + Date.now().toString(36).toUpperCase(),
-      state: 'active', metadata: { next_action: oForm.next_action || null }
+      state: 'active', metadata: meta
     })
     setSaving(false)
     if (!error) {
@@ -275,7 +277,7 @@ export default function CompanyDetail({ id, go }) {
             <button className="btn" onClick={() => setShowContact(true)}>+ Contact</button>
             <button className="btn" onClick={() => setShowTask(true)}>+ Task</button>
             <button className="btn" onClick={() => setShowMeeting(true)}>+ Call / Meeting</button>
-            <button className="btn" onClick={() => setShowOpp(true)}>+ Opportunity</button>
+            <button className="btn" onClick={() => setShowOpp(true)}>+ New opportunity</button>
           </div>
         </div>
         <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, fontSize: 13 }}>
@@ -359,12 +361,8 @@ export default function CompanyDetail({ id, go }) {
                   <td><Badge tone={t.status === 'completed' || t.status === 'done' ? 'green' : t.status === 'cancelled' ? 'gray' : 'blue'}>{t.status === 'completed' ? 'done' : t.status}</Badge></td>
                   <td>{t.due_at ? new Date(t.due_at).toLocaleDateString() : '—'}</td>
                   <td>
-                    {isTaskOpen(t.status) && (
-                      <span style={{ display: 'flex', gap: 4 }}>
-                        <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => markTaskDone(t.id)}>Done</button>
-                        <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => markTaskCancelled(t.id)}>Cancel</button>
-                      </span>
-                    )}
+                    {isTaskOpen(t.status) && <button className="btn" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => markTaskDone(t.id)}>Done</button>}
+                    {isTaskOpen(t.status) && <button className="btn" style={{ fontSize: 11, padding: '2px 6px', marginLeft: 4 }} onClick={() => markTaskCancelled(t.id)}>Cancel</button>}
                   </td>
                 </tr>
               ))}</tbody></table>}
@@ -374,13 +372,14 @@ export default function CompanyDetail({ id, go }) {
       {tab === 'meetings' && (
         <div className="card" style={{ padding: 0 }}>
           {meetings.length === 0 ? <div className="empty">No meetings yet</div> :
-            <table className="table"><thead><tr><th>Subject</th><th>Type</th><th>Outcome</th><th>Next action</th></tr></thead>
+            <table className="table"><thead><tr><th>Type</th><th>Subject</th><th>Outcome</th><th>Next Action</th><th>When</th></tr></thead>
               <tbody>{meetings.map(m => (
                 <tr key={m.id}>
-                  <td style={{ fontWeight: 600 }}>{m.subject}</td>
                   <td><Badge tone="blue">{m.type}</Badge></td>
+                  <td style={{ fontWeight: 600 }}>{m.subject}</td>
                   <td>{m.outcome || '—'}</td>
-                  <td>{m.next_action || '—'}</td>
+                  <td style={{ color: m.next_action ? '#1e40af' : undefined }}>{m.next_action || '—'}</td>
+                  <td>{m.scheduled_at ? new Date(m.scheduled_at).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}</tbody></table>}
         </div>
@@ -388,13 +387,13 @@ export default function CompanyDetail({ id, go }) {
 
       {tab === 'opportunities' && (
         <div className="card" style={{ padding: 0 }}>
-          {opps.length === 0 ? <div className="empty">No opportunities</div> :
-            <table className="table"><thead><tr><th>Name</th><th>Stage</th><th>Deal size</th><th>Close</th></tr></thead>
+          {opps.length === 0 ? <div className="empty">No opportunities. Use + New opportunity.</div> :
+            <table className="table"><thead><tr><th>Name</th><th>Stage</th><th>Value</th><th>Close</th></tr></thead>
               <tbody>{opps.map(o => (
                 <tr key={o.id}>
                   <td style={{ fontWeight: 600 }}>{o.name}</td>
                   <td><Badge tone="blue">{o.stage}</Badge></td>
-                  <td>{o.deal_size != null ? `₹${Number(o.deal_size).toLocaleString()}` : '—'}</td>
+                  <td>{o.deal_size ? `₹${Number(o.deal_size).toLocaleString()}` : '—'}</td>
                   <td>{o.expected_close_date || '—'}</td>
                 </tr>
               ))}</tbody></table>}
@@ -404,26 +403,25 @@ export default function CompanyDetail({ id, go }) {
       {tab === 'signals' && (
         <div className="card" style={{ padding: 0 }}>
           {signals.length === 0 ? <div className="empty">No signals logged</div> :
-            <table className="table"><thead><tr><th>Type</th><th>Observation</th><th>Review</th></tr></thead>
+            <table className="table"><thead><tr><th>Type</th><th>Observation</th><th>Status</th></tr></thead>
               <tbody>{signals.map(s => (
                 <tr key={s.id}>
-                  <td><Badge>{s.signal_type}</Badge></td>
+                  <td><Badge tone="blue">{s.signal_type}</Badge></td>
                   <td>{s.observation}</td>
                   <td><Badge>{s.review_status}</Badge></td>
                 </tr>
               ))}</tbody></table>}
-          <div style={{ padding: 16, borderTop: '1px solid #e2e8f0' }}>
-            <form onSubmit={logSignal}>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr auto', gap: 8 }}>
-                <select className="input" value={sigForm.signal_type} onChange={e => setSigForm({ ...sigForm, signal_type: e.target.value })}>
-                  {['news', 'hiring', 'funding', 'expansion', 'tender', 'leadership', 'other'].map(x => <option key={x} value={x}>{x}</option>)}
-                </select>
-                <input className="input" placeholder="Observation" value={sigForm.observation} onChange={e => setSigForm({ ...sigForm, observation: e.target.value })} />
-                <input className="input" placeholder="Source URL" value={sigForm.source} onChange={e => setSigForm({ ...sigForm, source: e.target.value })} />
-                <button className="btn primary" type="submit" disabled={saving}>Log</button>
-              </div>
-            </form>
-          </div>
+          <form onSubmit={logSignal} style={{ padding: 16, borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Log signal</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr auto', gap: 8 }}>
+              <select className="input" value={sigForm.signal_type} onChange={e => setSigForm({ ...sigForm, signal_type: e.target.value })}>
+                {['news', 'hiring', 'funding', 'expansion', 'tender', 'leadership', 'other'].map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+              <input className="input" placeholder="Observation *" value={sigForm.observation} onChange={e => setSigForm({ ...sigForm, observation: e.target.value })} required />
+              <input className="input" placeholder="Source" value={sigForm.source} onChange={e => setSigForm({ ...sigForm, source: e.target.value })} />
+              <button type="submit" className="btn primary" disabled={saving}>Log</button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -433,7 +431,7 @@ export default function CompanyDetail({ id, go }) {
             <Field label="Full name *"><input className="input" value={cForm.full_name} onChange={e => setCForm({ ...cForm, full_name: e.target.value })} required /></Field>
             <Field label="Role"><select className="input" value={cForm.role} onChange={e => setCForm({ ...cForm, role: e.target.value })}><option value="">—</option>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select></Field>
             <Field label="Job title"><input className="input" value={cForm.job_title} onChange={e => setCForm({ ...cForm, job_title: e.target.value })} /></Field>
-            <Field label="Email"><input className="input" type="email" value={cForm.email} onChange={e => setCForm({ ...cForm, email: e.target.value })} /></Field>
+            <Field label="Email"><input className="input" value={cForm.email} onChange={e => setCForm({ ...cForm, email: e.target.value })} /></Field>
             <Field label="Phone"><input className="input" value={cForm.phone} onChange={e => setCForm({ ...cForm, phone: e.target.value })} /></Field>
             <Actions saving={saving} onCancel={() => setShowContact(false)} label="Add contact" />
           </form>
@@ -445,8 +443,10 @@ export default function CompanyDetail({ id, go }) {
           <form onSubmit={addTask}>
             <Field label="Title *"><input className="input" value={tForm.title} onChange={e => setTForm({ ...tForm, title: e.target.value })} required /></Field>
             <Field label="Description"><textarea className="input" rows={3} value={tForm.description} onChange={e => setTForm({ ...tForm, description: e.target.value })} /></Field>
-            <Field label="Priority"><select className="input" value={tForm.priority} onChange={e => setTForm({ ...tForm, priority: e.target.value })}><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></Field>
-            <Field label="Due"><input className="input" type="date" value={tForm.due_at} onChange={e => setTForm({ ...tForm, due_at: e.target.value })} /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Priority"><select className="input" value={tForm.priority} onChange={e => setTForm({ ...tForm, priority: e.target.value })}><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></Field>
+              <Field label="Due"><input className="input" type="date" value={tForm.due_at} onChange={e => setTForm({ ...tForm, due_at: e.target.value })} /></Field>
+            </div>
             <Actions saving={saving} onCancel={() => setShowTask(false)} label="Add task" />
           </form>
         </Modal>
@@ -457,24 +457,44 @@ export default function CompanyDetail({ id, go }) {
           <form onSubmit={addMeeting}>
             <Field label="Type"><select className="input" value={mForm.type} onChange={e => setMForm({ ...mForm, type: e.target.value })}><option value="call">call</option><option value="meeting">meeting</option><option value="visit">visit</option><option value="message">message</option></select></Field>
             <Field label="Subject *"><input className="input" value={mForm.subject} onChange={e => setMForm({ ...mForm, subject: e.target.value })} required /></Field>
-            <Field label="Notes"><textarea className="input" rows={3} value={mForm.description} onChange={e => setMForm({ ...mForm, description: e.target.value })} /></Field>
+            <Field label="Notes"><textarea className="input" rows={2} value={mForm.description} onChange={e => setMForm({ ...mForm, description: e.target.value })} /></Field>
             <Field label="Outcome"><input className="input" value={mForm.outcome} onChange={e => setMForm({ ...mForm, outcome: e.target.value })} /></Field>
             <Field label="Next action"><input className="input" value={mForm.next_action} onChange={e => setMForm({ ...mForm, next_action: e.target.value })} /></Field>
             <Field label="Next action due"><input className="input" type="date" value={mForm.next_action_due_at} onChange={e => setMForm({ ...mForm, next_action_due_at: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setShowMeeting(false)} label="Save" />
+            <Actions saving={saving} onCancel={() => setShowMeeting(false)} label="Log meeting" />
           </form>
         </Modal>
       )}
 
       {showOpp && (
-        <Modal title="Add Opportunity" onClose={() => setShowOpp(false)}>
+        <Modal title="New opportunity" onClose={() => setShowOpp(false)} width={560}>
           <form onSubmit={addOpp}>
-            <Field label="Name *"><input className="input" value={oForm.name} onChange={e => setOForm({ ...oForm, name: e.target.value })} required /></Field>
-            <Field label="Stage"><select className="input" value={oForm.stage} onChange={e => setOForm({ ...oForm, stage: e.target.value })}>{OPP_STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-            <Field label="Deal size (INR)"><input className="input" type="number" value={oForm.deal_size} onChange={e => setOForm({ ...oForm, deal_size: e.target.value })} /></Field>
-            <Field label="Requirement"><textarea className="input" rows={2} value={oForm.requirement_description} onChange={e => setOForm({ ...oForm, requirement_description: e.target.value })} /></Field>
-            <Field label="Expected close"><input className="input" type="date" value={oForm.expected_close_date} onChange={e => setOForm({ ...oForm, expected_close_date: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setShowOpp(false)} label="Add opportunity" />
+            <Field label="Company">
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{company.name}</div>
+            </Field>
+            <Field label="Opportunity name *">
+              <input className="input" required value={oForm.name} onChange={e => setOForm({ ...oForm, name: e.target.value })} placeholder="e.g. Workspace fit-out · Phase 1" />
+            </Field>
+            <Field label="Requirement *">
+              <textarea className="input" rows={3} required value={oForm.requirement_description} onChange={e => setOForm({ ...oForm, requirement_description: e.target.value })} placeholder="What does the buyer need?" />
+            </Field>
+            <Field label="Proposed solution / Hexagon fit">
+              <textarea className="input" rows={2} value={oForm.solution} onChange={e => setOForm({ ...oForm, solution: e.target.value })} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="Stage">
+                <select className="input" value={oForm.stage} onChange={e => setOForm({ ...oForm, stage: e.target.value })}>
+                  {OPP_STAGES.filter(s => s !== 'won' && s !== 'lost').map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="Est. value (INR)">
+                <input className="input" type="number" value={oForm.deal_size} onChange={e => setOForm({ ...oForm, deal_size: e.target.value })} />
+              </Field>
+              <Field label="Expected close">
+                <input className="input" type="date" value={oForm.expected_close_date} onChange={e => setOForm({ ...oForm, expected_close_date: e.target.value })} />
+              </Field>
+            </div>
+            <Actions saving={saving} onCancel={() => setShowOpp(false)} label="Create opportunity" />
           </form>
         </Modal>
       )}
@@ -506,15 +526,14 @@ export default function CompanyDetail({ id, go }) {
           <p style={{ fontSize: 13, color: '#475569', marginBottom: 12 }}>Creates research tasks and queue entry. Opens search links for free investigation.</p>
           {researchMsg && <div className="notice" style={{ marginBottom: 12 }}>{researchMsg}</div>}
           <div style={{ marginBottom: 12 }}>
-            <h3 style={{ fontSize: 14, marginBottom: 8 }}>Search (opens in a new tab)</h3>
-            <ul style={{ fontSize: 13, paddingLeft: 18 }}>
-              {searchLinks().map(([label, href]) => (
-                <li key={label} style={{ marginBottom: 4 }}><a href={href} target="_blank" rel="noreferrer">{label}</a></li>
-              ))}
-            </ul>
+            {searchLinks().map(([label, url]) => (
+              <div key={label} style={{ marginBottom: 6 }}>
+                <a href={url} target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontSize: 13 }}>{label}</a>
+              </div>
+            ))}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn primary" disabled={researchBusy} onClick={initiateResearch}>{researchBusy ? 'Starting…' : 'Start research tasks'}</button>
+            <button type="button" className="btn primary" disabled={researchBusy} onClick={initiateResearch}>{researchBusy ? 'Working…' : 'Start research'}</button>
             <button type="button" className="btn" onClick={() => setShowResearch(false)}>Close</button>
           </div>
         </Modal>

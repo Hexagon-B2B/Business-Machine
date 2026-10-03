@@ -7,10 +7,12 @@ import {
   loadQuotesForOpp, saveQuotation, updateQuoteStatus, QUOTE_STATUS,
 } from '../lib/quotations'
 
+/** Not nested in opportunity form. Customer price: direct or margin % on transfer. */
 export default function QuotationPanel({ opportunity, onTotalChange }) {
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [ok, setOk] = useState('')
   const [mode, setMode] = useState(null)
   const [baseQuote, setBaseQuote] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -33,15 +35,15 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     setLoading(false)
     if (err) { setError(err.message); setQuotes([]); return }
     setQuotes(q)
-    if (q[0] && onTotalChange) onTotalChange(q[0].total_value)
+    if (q[0]?.total_value != null && onTotalChange) onTotalChange(q[0].total_value)
   }
 
   function startCreate() {
-    setBaseQuote(null); setMode('create'); setForm(blankForm())
+    setBaseQuote(null); setMode('create'); setForm(blankForm()); setError(''); setOk('')
   }
 
   function startRevise(q) {
-    setBaseQuote(q); setMode('revise')
+    setBaseQuote(q); setMode('revise'); setError(''); setOk('')
     const items = (q.quotation_items || []).length
       ? q.quotation_items.map(it => ({ ...emptyItem(), ...it, id: it.id || emptyItem().id }))
       : [emptyItem()]
@@ -53,8 +55,37 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
   }
 
   function setItem(id, key, val) {
-    setForm(f => ({ ...f, items: f.items.map(it => it.id === id ? { ...it, [key]: val } : it) }))
+    setForm(f => ({
+      ...f,
+      items: f.items.map(it => {
+        if (it.id !== id) return it
+        const next = { ...it, [key]: val }
+        if (key === 'margin_pct') {
+          const xfer = Number(next.transfer_price) || 0
+          const pct = Number(val)
+          if (xfer > 0 && val !== '' && !Number.isNaN(pct)) {
+            next.customer_price = Math.round(xfer * (1 + pct / 100) * 100) / 100
+          }
+        }
+        if (key === 'customer_price') {
+          const xfer = Number(next.transfer_price) || 0
+          const cust = Number(val) || 0
+          if (xfer > 0 && cust > 0) {
+            next.margin_pct = Math.round(((cust - xfer) / xfer) * 1000) / 10
+          }
+        }
+        if (key === 'transfer_price' && next.margin_pct !== '' && next.margin_pct != null) {
+          const xfer = Number(val) || 0
+          const pct = Number(next.margin_pct)
+          if (xfer > 0 && !Number.isNaN(pct)) {
+            next.customer_price = Math.round(xfer * (1 + pct / 100) * 100) / 100
+          }
+        }
+        return next
+      }),
+    }))
   }
+
   function addProduct() { setForm(f => ({ ...f, items: [...f.items, emptyItem({ line_type: 'product' })] })) }
   function addUpgrade(parentId) { setForm(f => ({ ...f, items: [...f.items, emptyUpgrade(parentId)] })) }
   function addCharge(kind) { setForm(f => ({ ...f, items: [...f.items, emptyCharge(kind)] })) }
@@ -65,32 +96,44 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     })
   }
 
-  async function handleSave(e) {
-    e.preventDefault()
+  async function handleSave() {
     const filled = form.items.filter(it => (it.product_name || '').trim())
     if (!filled.length) { setError('Add at least one product or charge with a name.'); return }
     if (mode === 'revise' && !(form.revision_reason || '').trim()) { setError('Revision reason is required.'); return }
-    setSaving(true); setError('')
+    setSaving(true); setError(''); setOk('')
     const nextVersion = mode === 'revise' && baseQuote
       ? (Number(baseQuote.version) || 1) + 1
       : (quotes.length ? Math.max(...quotes.map(q => q.version || 1)) + 1 : 1)
-    const { error: err } = await saveQuotation({
-      opportunityId: opportunity.id, companyId: opportunity.company_id,
+    const { quote, error: err } = await saveQuotation({
+      opportunityId: opportunity.id,
+      companyId: opportunity.company_id,
       quotation_no: mode === 'revise' ? (baseQuote?.quotation_no || form.quotation_no) : form.quotation_no,
       version: mode === 'create' && !quotes.length ? 1 : nextVersion,
-      status: form.status || 'draft', validity_date: form.validity_date, delivery_tat: form.delivery_tat,
-      payment_terms: form.payment_terms, transport_terms: form.transport_terms, special_terms: form.special_terms,
-      revision_reason: form.revision_reason, no_regret_price: form.no_regret_price, notes: form.notes,
-      items: form.items, supersedePreviousId: mode === 'revise' && baseQuote ? baseQuote.id : null,
+      status: form.status || 'draft',
+      validity_date: form.validity_date,
+      delivery_tat: form.delivery_tat,
+      payment_terms: form.payment_terms,
+      transport_terms: form.transport_terms,
+      special_terms: form.special_terms,
+      revision_reason: form.revision_reason,
+      no_regret_price: form.no_regret_price,
+      notes: form.notes,
+      items: form.items,
+      supersedePreviousId: mode === 'revise' && baseQuote ? baseQuote.id : null,
     })
     setSaving(false)
-    if (err) { setError(err.message); return }
-    setMode(null); setBaseQuote(null); load()
+    if (err) { setError(err.message || 'Save failed'); return }
+    const no = quote?.quotation_no || 'Quote'
+    setOk(`Saved ${no} · V${quote?.version || nextVersion}. Open it below to review.`)
+    setMode(null)
+    setBaseQuote(null)
+    await load()
+    if (quote?.total_value != null && onTotalChange) onTotalChange(quote.total_value)
   }
 
   async function setStatus(id, status) {
     const { error: err } = await updateQuoteStatus(id, status, opportunity.id)
-    if (err) setError(err.message); else load()
+    if (err) setError(err.message); else { setOk(`Status → ${status}`); load() }
   }
 
   const mainProducts = form.items.filter(it => (it.line_type || 'product') === 'product')
@@ -121,13 +164,13 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
           )}
           <button type="button" className="btn" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => removeItem(it.id)}>×</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: isCharge ? '1.2fr 0.6fr 0.7fr 0.7fr' : '1.2fr 0.7fr 0.7fr 0.5fr 0.7fr 0.7fr', gap: 6 }}>
-          <input className="input" placeholder={isCharge ? 'Charge name' : isUpgrade ? 'Component e.g. 32GB DDR5' : 'Product e.g. Laptop base config'}
+        <div style={{ display: 'grid', gridTemplateColumns: isCharge ? '1.2fr 0.5fr 0.7fr 0.6fr 0.7fr' : '1.1fr 0.6fr 0.6fr 0.45fr 0.65fr 0.55fr 0.65fr', gap: 6 }}>
+          <input className="input" placeholder={isCharge ? 'Charge name' : isUpgrade ? 'Component e.g. 32GB DDR5' : 'Product e.g. Laptop base'}
             value={it.product_name} onChange={e => setItem(it.id, 'product_name', e.target.value)} />
           {!isCharge && (
             <>
               <input className="input" placeholder="Brand" value={it.brand || ''} onChange={e => setItem(it.id, 'brand', e.target.value)} />
-              <input className="input" placeholder="Spec / model" value={it.specification || ''} onChange={e => setItem(it.id, 'specification', e.target.value)} />
+              <input className="input" placeholder="Spec" value={it.specification || ''} onChange={e => setItem(it.id, 'specification', e.target.value)} />
               <input className="input" type="number" placeholder="Qty" value={it.quantity} onChange={e => setItem(it.id, 'quantity', e.target.value)} />
             </>
           )}
@@ -136,7 +179,10 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
           )}
           <input className="input" type="number" placeholder="Transfer ₹" title="Buy / transfer price"
             value={it.transfer_price ?? ''} onChange={e => setItem(it.id, 'transfer_price', e.target.value)} />
-          <input className="input" type="number" placeholder="Customer ₹" title="Sell price"
+          <input className="input" type="number" placeholder="Mgn %" title="Margin % on transfer fills customer price"
+            value={it.margin_pct ?? ''} onChange={e => setItem(it.id, 'margin_pct', e.target.value)}
+            disabled={it.billing === 'off_invoice'} />
+          <input className="input" type="number" placeholder="Customer ₹" title="Sell price direct or from %"
             value={it.customer_price ?? ''} onChange={e => setItem(it.id, 'customer_price', e.target.value)}
             disabled={it.billing === 'off_invoice'} />
         </div>
@@ -161,7 +207,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
         <div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Quotations</div>
           <div style={{ fontSize: 12, color: '#64748b' }}>
-            Quote No · Revisions · Base + upgrades · Transfer vs Customer · On-bill / Off-invoice
+            Quote No · Revisions · Base + upgrades · Transfer / Margin % / Customer · On-bill / Off-invoice
           </div>
         </div>
         {!mode && (
@@ -172,9 +218,10 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       </div>
 
       {error && <div className="notice" style={{ background: '#fef2f2', borderColor: '#fecaca', color: '#991b1b' }}>{error}</div>}
+      {ok && <div className="notice" style={{ background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' }}>{ok}</div>}
 
       {mode && (
-        <form onSubmit={handleSave} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
             {mode === 'revise'
               ? `Revise ${baseQuote?.quotation_no || ''} V${baseQuote?.version} → V${(Number(baseQuote?.version) || 1) + 1}`
@@ -182,9 +229,9 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
           </div>
           {mode === 'revise' && (
             <Field label="Revision reason *">
-              <input className="input" required value={form.revision_reason}
+              <input className="input" value={form.revision_reason}
                 onChange={e => setForm({ ...form, revision_reason: e.target.value })}
-                placeholder="e.g. RAM upgrade vendor change · price negotiation · transport on bill" />
+                placeholder="e.g. RAM vendor change · price negotiation" />
             </Field>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
@@ -205,11 +252,8 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
           </div>
 
           <div className="notice" style={{ marginTop: 8, marginBottom: 10, fontSize: 12 }}>
-            <strong>PC / workstation pattern:</strong> Base product (e.g. Laptop i5/16GB/512GB) →
-            <em> + Upgrade / component</em> for RAM, SSD, etc. (any vendor).
-            Transfer ₹ = buy price · Customer ₹ = sell price.
-            Installation / Warranty / Transport: <strong>On bill</strong> = line on invoice ·
-            <strong>Off invoice</strong> = in product cost (not a customer line).
+            <strong>Pricing:</strong> Transfer ₹ (cost), then either <em>Mgn %</em> (fills Customer ₹) or type Customer ₹ (fills %).
+            Upgrades under base product. Charges: On bill = invoice · Off invoice = cost only.
           </div>
 
           <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Products & upgrades</div>
@@ -245,13 +289,19 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
               </label>
             </div>
           </div>
-          <Actions saving={saving} onCancel={() => { setMode(null); setError('') }} label="Save quotation" />
-        </form>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={() => { setMode(null); setError('') }} disabled={saving}>Cancel</button>
+            <button type="button" className="btn primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save quotation'}
+            </button>
+          </div>
+        </div>
       )}
 
       {loading ? <div className="loading" style={{ padding: 16 }}>Loading quotes…</div> : (
         quotes.length === 0 && !mode ? (
-          <div className="empty" style={{ padding: 20 }}>No quotations yet. Create base product + upgrades and charges.</div>
+          <div className="empty" style={{ padding: 20 }}>No quotations yet. Create base + upgrades, then Save quotation.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {quotes.map(q => {

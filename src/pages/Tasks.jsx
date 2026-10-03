@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { PAGE_SIZE, TASK_STATUS, TASK_PRIORITY, TRIGGER_TYPE_LABELS } from '../constants'
+import { PAGE_SIZE, TASK_STATUS, TASK_PRIORITY, TRIGGER_TYPE_LABELS, isTaskClosed, isTaskOpen } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
 
 export default function Tasks({ go }) {
@@ -33,7 +33,7 @@ export default function Tasks({ go }) {
       .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
       .range(from, to)
     if (filter === 'open') q = q.in('status', ['open', 'in_progress'])
-    else if (filter === 'done') q = q.eq('status', 'done')
+    else if (filter === 'done') q = q.in('status', ['completed', 'done'])
     else if (filter === 'cancelled') q = q.eq('status', 'cancelled')
     const { data, count, error } = await q
     if (error) {
@@ -57,13 +57,15 @@ export default function Tasks({ go }) {
 
   async function updateTaskStatus(id, status) {
     setBusyId(id)
-    const payload = { status }
-    if (status === 'done') {
+    // DB check constraint: use 'completed' (not 'done')
+    const dbStatus = status === 'done' ? 'completed' : status
+    const payload = { status: dbStatus }
+    if (dbStatus === 'completed') {
       payload.completed_at = new Date().toISOString()
     }
     let { error } = await supabase.from('tasks').update(payload).eq('id', id)
     if (error && /completed_at|column/i.test(error.message)) {
-      ;({ error } = await supabase.from('tasks').update({ status }).eq('id', id))
+      ;({ error } = await supabase.from('tasks').update({ status: dbStatus }).eq('id', id))
     }
     setBusyId(null)
     if (error) {
@@ -71,21 +73,21 @@ export default function Tasks({ go }) {
       console.error('task status update', error)
       return false
     }
-    if (filter === 'open' && (status === 'done' || status === 'cancelled')) {
+    if (filter === 'open' && isTaskClosed(dbStatus)) {
       setTasks(prev => prev.filter(t => t.id !== id))
       setTotal(t => Math.max(0, t - 1))
     } else {
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t))
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: dbStatus } : t))
     }
     if (edit?.id === id) setEdit(null)
-    showFlash(status === 'done' ? 'Task marked done.' : status === 'cancelled' ? 'Task cancelled.' : 'Task updated.')
+    showFlash(dbStatus === 'completed' ? 'Task marked done.' : dbStatus === 'cancelled' ? 'Task cancelled.' : 'Task updated.')
     load()
     return true
   }
 
   async function markDone(e, id) {
     if (e) { e.preventDefault(); e.stopPropagation() }
-    await updateTaskStatus(id, 'done')
+    await updateTaskStatus(id, 'completed')
   }
 
   async function cancelTask(e, id) {
@@ -99,14 +101,16 @@ export default function Tasks({ go }) {
     e.stopPropagation()
     if (!edit?.title?.trim()) return
     setSaving(true)
+    let status = edit.status || 'open'
+    if (status === 'done') status = 'completed' // DB constraint
     const payload = {
       title: edit.title.trim(),
       description: edit.description || null,
       priority: edit.priority || 'medium',
-      status: edit.status || 'open',
+      status,
       due_at: edit.due_at || null,
     }
-    if (payload.status === 'done') {
+    if (payload.status === 'completed') {
       payload.completed_at = new Date().toISOString()
     }
     let { error } = await supabase.from('tasks').update(payload).eq('id', edit.id)
@@ -124,7 +128,7 @@ export default function Tasks({ go }) {
     const newStatus = payload.status
     setEdit(null)
     showFlash('Task saved.')
-    if (filter === 'open' && (newStatus === 'done' || newStatus === 'cancelled')) {
+    if (filter === 'open' && isTaskClosed(newStatus)) {
       setTasks(prev => prev.filter(t => t.id !== id))
       setTotal(t => Math.max(0, t - 1))
     }
@@ -144,11 +148,11 @@ export default function Tasks({ go }) {
     ) : '—' },
     { key: 'type', label: 'Type', render: typeBadge },
     { key: 'priority', label: 'Priority', render: t => <Badge tone={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'yellow' : 'gray'}>{t.priority}</Badge> },
-    { key: 'status', label: 'Status', render: t => <Badge tone={t.status === 'done' ? 'green' : t.status === 'cancelled' ? 'gray' : 'blue'}>{t.status}</Badge> },
+    { key: 'status', label: 'Status', render: t => <Badge tone={t.status === 'completed' || t.status === 'done' ? 'green' : t.status === 'cancelled' ? 'gray' : 'blue'}>{t.status === 'completed' ? 'done' : t.status}</Badge> },
     { key: 'due_at', label: 'Due', render: t => t.due_at ? new Date(t.due_at).toLocaleDateString() : '—' },
     { key: 'action', label: '', render: t => (
       <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-        {t.status !== 'done' && t.status !== 'cancelled' && (
+        {isTaskOpen(t.status) && (
           <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
             disabled={busyId === t.id}
             onClick={e => markDone(e, t.id)}>
@@ -224,13 +228,14 @@ export default function Tasks({ go }) {
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="Priority">
+                <select className="input" value={edit.status === 'done' ? 'completed' : (edit.status || 'open')} onChange={e => setEdit({ ...edit, status: e.target.value })} style={{ display: 'none' }} />
                 <select className="input" value={edit.priority || 'medium'} onChange={e => setEdit({ ...edit, priority: e.target.value })}>
                   {TASK_PRIORITY.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
               <Field label="Status">
-                <select className="input" value={edit.status || 'open'} onChange={e => setEdit({ ...edit, status: e.target.value })}>
-                  {TASK_STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+                <select className="input" value={edit.status === 'done' ? 'completed' : (edit.status || 'open')} onChange={e => setEdit({ ...edit, status: e.target.value })}>
+                  {TASK_STATUS.map(s => <option key={s} value={s}>{s === 'completed' ? 'done' : s}</option>)}
                 </select>
               </Field>
               <Field label="Due date">
@@ -238,7 +243,7 @@ export default function Tasks({ go }) {
               </Field>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              {edit.status !== 'done' && edit.status !== 'cancelled' && (
+              {isTaskOpen(edit.status) && (
                 <button type="button" className="btn primary" disabled={busyId === edit.id}
                   onClick={e => markDone(e, edit.id)}>
                   {busyId === edit.id ? 'Saving…' : 'Mark Done'}

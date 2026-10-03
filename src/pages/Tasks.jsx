@@ -14,21 +14,32 @@ export default function Tasks({ go }) {
   const [page, setPage] = useState(1)
   const [edit, setEdit] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState(null)
+  const [flash, setFlash] = useState('')
 
   useEffect(() => { load() }, [filter, sourceFilter, page, sortKey, sortDir])
+
+  function showFlash(msg) {
+    setFlash(msg)
+    setTimeout(() => setFlash(''), 3500)
+  }
 
   async function load() {
     setLoading(true)
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     let q = supabase.from('tasks')
-      .select('id, title, description, priority, status, due_at, company_id, source, metadata, companies(name)', { count: 'exact' })
+      .select('id, title, description, priority, status, due_at, company_id, source, metadata, state, companies(name)', { count: 'exact' })
       .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
       .range(from, to)
     if (filter === 'open') q = q.in('status', ['open', 'in_progress'])
     else if (filter === 'done') q = q.eq('status', 'done')
     else if (filter === 'cancelled') q = q.eq('status', 'cancelled')
-    const { data, count } = await q
+    const { data, count, error } = await q
+    if (error) {
+      console.error(error)
+      showFlash('Load failed: ' + error.message)
+    }
     let rows = data || []
     const isTrig = t => t.source === 'trigger' || t.source === 'research' || t.metadata?.origin === 'trigger' || t.metadata?.trigger_type
     if (sourceFilter === 'trigger') rows = rows.filter(isTrig)
@@ -44,33 +55,80 @@ export default function Tasks({ go }) {
     setPage(1)
   }
 
-  async function markDone(id) {
-    await supabase.from('tasks').update({ status: 'done' }).eq('id', id)
+  async function updateTaskStatus(id, status) {
+    setBusyId(id)
+    const payload = { status }
+    if (status === 'done') {
+      payload.completed_at = new Date().toISOString()
+    }
+    let { error } = await supabase.from('tasks').update(payload).eq('id', id)
+    if (error && /completed_at|column/i.test(error.message)) {
+      ;({ error } = await supabase.from('tasks').update({ status }).eq('id', id))
+    }
+    setBusyId(null)
+    if (error) {
+      showFlash('Update failed: ' + error.message)
+      console.error('task status update', error)
+      return false
+    }
+    if (filter === 'open' && (status === 'done' || status === 'cancelled')) {
+      setTasks(prev => prev.filter(t => t.id !== id))
+      setTotal(t => Math.max(0, t - 1))
+    } else {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t))
+    }
     if (edit?.id === id) setEdit(null)
+    showFlash(status === 'done' ? 'Task marked done.' : status === 'cancelled' ? 'Task cancelled.' : 'Task updated.')
     load()
+    return true
   }
 
-  async function cancelTask(id) {
+  async function markDone(e, id) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
+    await updateTaskStatus(id, 'done')
+  }
+
+  async function cancelTask(e, id) {
+    if (e) { e.preventDefault(); e.stopPropagation() }
     if (!confirm('Cancel this task?')) return
-    await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id)
-    if (edit?.id === id) setEdit(null)
-    load()
+    await updateTaskStatus(id, 'cancelled')
   }
 
   async function saveEdit(e) {
     e.preventDefault()
+    e.stopPropagation()
     if (!edit?.title?.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('tasks').update({
+    const payload = {
       title: edit.title.trim(),
       description: edit.description || null,
-      priority: edit.priority,
-      status: edit.status,
+      priority: edit.priority || 'medium',
+      status: edit.status || 'open',
       due_at: edit.due_at || null,
-    }).eq('id', edit.id)
+    }
+    if (payload.status === 'done') {
+      payload.completed_at = new Date().toISOString()
+    }
+    let { error } = await supabase.from('tasks').update(payload).eq('id', edit.id)
+    if (error && /completed_at|column/i.test(error.message)) {
+      delete payload.completed_at
+      ;({ error } = await supabase.from('tasks').update(payload).eq('id', edit.id))
+    }
     setSaving(false)
-    if (error) alert(error.message)
-    else { setEdit(null); load() }
+    if (error) {
+      showFlash('Save failed: ' + error.message)
+      console.error('task save', error)
+      return
+    }
+    const id = edit.id
+    const newStatus = payload.status
+    setEdit(null)
+    showFlash('Task saved.')
+    if (filter === 'open' && (newStatus === 'done' || newStatus === 'cancelled')) {
+      setTasks(prev => prev.filter(t => t.id !== id))
+      setTotal(t => Math.max(0, t - 1))
+    }
+    load()
   }
 
   function typeBadge(t) {
@@ -81,7 +139,7 @@ export default function Tasks({ go }) {
   const columns = [
     { key: 'title', label: 'Title', bold: true },
     { key: 'company', label: 'Company', render: t => t.companies?.name ? (
-      <button style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
+      <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
         onClick={e => { e.stopPropagation(); go('company', t.company_id) }}>{t.companies.name}</button>
     ) : '—' },
     { key: 'type', label: 'Type', render: typeBadge },
@@ -91,18 +149,31 @@ export default function Tasks({ go }) {
     { key: 'action', label: '', render: t => (
       <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
         {t.status !== 'done' && t.status !== 'cancelled' && (
-          <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => markDone(t.id)}>Done</button>
+          <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
+            disabled={busyId === t.id}
+            onClick={e => markDone(e, t.id)}>
+            {busyId === t.id ? '…' : 'Done'}
+          </button>
         )}
-        <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setEdit({ ...t, due_at: (t.due_at || '').slice(0, 10) })}>Edit</button>
+        <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
+          onClick={e => { e.stopPropagation(); setEdit({ ...t, due_at: (t.due_at || '').slice(0, 10) }) }}>
+          Edit
+        </button>
       </div>
     )},
   ]
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Work" title="Tasks" subtitle="Scheduled by you or generated by triggers. Click Edit to update any task including trigger work.">
-        <button className="btn primary" onClick={() => go('companies')}>Go to Companies →</button>
+      <PageHead eyebrow="Work" title="Tasks" subtitle="Scheduled by you or generated by triggers. Use Done or Edit → Mark Done to close work.">
+        <button type="button" className="btn primary" onClick={() => go('companies')}>Go to Companies →</button>
       </PageHead>
+
+      {flash && (
+        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') ? '#fef2f2' : '#ecfdf5', borderColor: flash.includes('failed') ? '#fecaca' : '#a7f3d0', color: flash.includes('failed') ? '#991b1b' : '#065f46' }}>
+          {flash}
+        </div>
+      )}
 
       <FilterTabs value={filter} onChange={v => { setFilter(v); setPage(1) }}
         options={[
@@ -119,7 +190,7 @@ export default function Tasks({ go }) {
           { value: 'user', label: 'Scheduled (you)' },
           { value: 'trigger', label: 'Trigger / Enrichment' },
         ].map(o => (
-          <button key={o.value} className="btn" onClick={() => { setSourceFilter(o.value); setPage(1) }}
+          <button type="button" key={o.value} className="btn" onClick={() => { setSourceFilter(o.value); setPage(1) }}
             style={{ background: sourceFilter === o.value ? '#1e40af' : '#fff', color: sourceFilter === o.value ? '#fff' : '#0f172a', fontSize: 12 }}>
             {o.label}
           </button>
@@ -168,10 +239,14 @@ export default function Tasks({ go }) {
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               {edit.status !== 'done' && edit.status !== 'cancelled' && (
-                <button type="button" className="btn" onClick={() => markDone(edit.id)}>Mark Done</button>
+                <button type="button" className="btn primary" disabled={busyId === edit.id}
+                  onClick={e => markDone(e, edit.id)}>
+                  {busyId === edit.id ? 'Saving…' : 'Mark Done'}
+                </button>
               )}
               {edit.status !== 'cancelled' && (
-                <button type="button" className="btn danger" onClick={() => cancelTask(edit.id)}>Cancel task</button>
+                <button type="button" className="btn danger" disabled={busyId === edit.id}
+                  onClick={e => cancelTask(e, edit.id)}>Cancel task</button>
               )}
               {edit.company_id && (
                 <button type="button" className="btn" onClick={() => { setEdit(null); go('company', edit.company_id) }}>Open company →</button>

@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState('dashboard')
   const [selectedCompanyId, setSelectedCompanyId] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -26,12 +27,15 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  useEffect(() => { setMenuOpen(false) }, [page, selectedCompanyId])
+
   if (loading) return <div className="loading">Loading Hexagon B2B...</div>
   if (!session) return <Login />
 
   const go = (p, companyId = null) => {
     setPage(p)
     setSelectedCompanyId(companyId)
+    setMenuOpen(false)
   }
 
   const nav = [
@@ -43,42 +47,74 @@ export default function App() {
     ['research', 'Research & Signals'],
   ]
 
+  const pageLabel = page === 'company'
+    ? 'Company'
+    : (nav.find(([id]) => id === page)?.[1] || 'Hexagon B2B')
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{
-        width: 230, background: '#0f172a', color: '#e2e8f0',
-        padding: '20px 0', flexShrink: 0, display: 'flex', flexDirection: 'column'
-      }}>
-        <div style={{ padding: '0 20px 20px', borderBottom: '1px solid #1e293b' }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', color: '#64748b' }}>HEXAGON B2B</div>
-          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>Sales & Business OS</div>
+    <div className="app-shell">
+      <header className="mobile-bar">
+        <button
+          type="button"
+          className="menu-toggle"
+          aria-label="Open menu"
+          onClick={() => setMenuOpen(true)}
+        >
+          ☰
+        </button>
+        <div className="mobile-bar-title">
+          <div className="mobile-bar-eyebrow">HEXAGON B2B</div>
+          <div>{pageLabel}</div>
         </div>
-        <nav style={{ padding: '12px 10px', flex: 1 }}>
+      </header>
+
+      {menuOpen && (
+        <div className="nav-backdrop" onClick={() => setMenuOpen(false)} />
+      )}
+
+      <aside className={`app-nav ${menuOpen ? 'open' : ''}`}>
+        <div className="nav-brand">
+          <div className="nav-brand-eyebrow">HEXAGON B2B</div>
+          <div className="nav-brand-title">Sales & Business OS</div>
+          <button
+            type="button"
+            className="nav-close"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+          >
+            ×
+          </button>
+        </div>
+        <nav className="nav-links">
           {nav.map(([id, label]) => (
-            <button key={id} onClick={() => go(id)}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px',
-                marginBottom: 2, border: 0, borderRadius: 8,
-                background: page === id || (page === 'company' && id === 'companies') ? '#1e293b' : 'transparent',
-                color: page === id || (page === 'company' && id === 'companies') ? '#fff' : '#94a3b8',
-                fontWeight: 600, fontSize: 13, cursor: 'pointer'
-              }}>
+            <button
+              key={id}
+              type="button"
+              onClick={() => go(id)}
+              className={
+                page === id || (page === 'company' && id === 'companies')
+                  ? 'nav-link active'
+                  : 'nav-link'
+              }
+            >
               {label}
             </button>
           ))}
         </nav>
-        <div style={{ padding: '16px 20px', borderTop: '1px solid #1e293b' }}>
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {session.user.email}
-          </div>
-          <button className="btn" style={{ width: '100%', background: '#1e293b', color: '#e2e8f0', border: 'none' }}
-            onClick={() => supabase.auth.signOut()}>
+        <div className="nav-footer">
+          <div className="nav-email">{session.user.email}</div>
+          <button
+            type="button"
+            className="btn"
+            style={{ width: '100%', background: '#1e293b', color: '#e2e8f0', border: 'none' }}
+            onClick={() => supabase.auth.signOut()}
+          >
             Sign out
           </button>
         </div>
       </aside>
 
-      <main style={{ flex: 1, overflow: 'auto', background: '#f1f5f9' }}>
+      <main className="app-main">
         {page === 'dashboard' && <Dashboard go={go} />}
         {page === 'companies' && <Companies go={go} />}
         {page === 'company' && <CompanyDetail id={selectedCompanyId} go={go} />}

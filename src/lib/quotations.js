@@ -3,7 +3,6 @@ import { logActivity } from './activityLog'
 
 export const QUOTE_STATUS = ['draft', 'sent', 'accepted', 'rejected', 'superseded']
 
-/** line_type: product (base) | upgrade (sub-item) | charge (install/warranty/transport/other) */
 export function emptyItem(overrides = {}) {
   return {
     id: 'tmp_' + Math.random().toString(36).slice(2, 9),
@@ -17,6 +16,8 @@ export function emptyItem(overrides = {}) {
     quantity: 1,
     transfer_price: '',
     customer_price: '',
+    margin_pct: '',
+    min_margin_pct: '',
     billing: 'on_bill',
     charge_kind: '',
     notes: '',
@@ -38,32 +39,105 @@ export function emptyCharge(kind) {
   })
 }
 
-export function lineCustomerTotal(item) {
-  const q = Number(item.quantity) || 0
-  const p = Number(item.customer_price ?? item.unit_price) || 0
-  if (item.billing === 'off_invoice') return 0
-  return Math.round(q * p * 100) / 100
-}
-
 export function lineTransferTotal(item) {
   const q = Number(item.quantity) || 0
   const p = Number(item.transfer_price ?? item.cost_price) || 0
   return Math.round(q * p * 100) / 100
 }
 
+export function childUpgrades(items, parentId) {
+  return (items || []).filter(it => it.line_type === 'upgrade' && it.parent_id === parentId)
+}
+
+export function groupRollup(base, items) {
+  const ups = childUpgrades(items, base.id)
+  const baseXfer = lineTransferTotal(base)
+  const upXfer = ups.reduce((s, u) => s + lineTransferTotal(u), 0)
+  const transferTotal = Math.round((baseXfer + upXfer) * 100) / 100
+
+  const parts = []
+  const baseName = (base.product_name || '').trim() || 'Product'
+  const baseSpec = [base.brand, base.specification].filter(Boolean).join(' ')
+  parts.push(baseSpec ? `${baseName} (${baseSpec})` : baseName)
+  for (const u of ups) {
+    const un = (u.product_name || '').trim()
+    if (!un) continue
+    const us = [u.brand, u.specification].filter(Boolean).join(' ')
+    parts.push(us ? `${un} (${us})` : un)
+  }
+  const mergedDescription =
+    ups.length > 0
+      ? `${parts[0]} + ${parts.slice(1).join(' + ')} [incl. ${ups.length} upgrade${ups.length > 1 ? 's' : ''}]`
+      : parts[0]
+
+  const qty = Number(base.quantity) || 1
+  let marginPct = base.margin_pct !== '' && base.margin_pct != null ? Number(base.margin_pct) : null
+  let customerTotal
+  if (marginPct != null && !Number.isNaN(marginPct) && transferTotal > 0) {
+    customerTotal = Math.round(transferTotal * (1 + marginPct / 100) * 100) / 100
+  } else {
+    const unitCust = Number(base.customer_price ?? base.unit_price) || 0
+    if (ups.length && unitCust > 0 && qty === 1) {
+      customerTotal = Math.round(unitCust * 100) / 100
+    } else {
+      customerTotal = Math.round(unitCust * qty * 100) / 100
+    }
+    if (transferTotal > 0 && customerTotal > 0) {
+      marginPct = Math.round(((customerTotal - transferTotal) / transferTotal) * 1000) / 10
+    }
+  }
+  if (base.billing === 'off_invoice') customerTotal = 0
+
+  const minFloors = []
+  if (base.min_margin_pct !== '' && base.min_margin_pct != null) minFloors.push(Number(base.min_margin_pct))
+  for (const u of ups) {
+    const m = u.min_margin_pct !== '' && u.min_margin_pct != null ? Number(u.min_margin_pct) : (u.margin_pct !== '' && u.margin_pct != null ? Number(u.margin_pct) : null)
+    if (m != null && !Number.isNaN(m)) minFloors.push(m)
+  }
+  const minMarginPct = minFloors.length ? Math.max(...minFloors) : null
+  const effectiveMargin = transferTotal > 0 ? Math.round(((customerTotal - transferTotal) / transferTotal) * 1000) / 10 : 0
+  const belowMin = minMarginPct != null && effectiveMargin < minMarginPct
+
+  return {
+    base, upgrades: ups, transferTotal, customerTotal,
+    marginPct: marginPct != null && !Number.isNaN(marginPct) ? marginPct : effectiveMargin,
+    minMarginPct, belowMin, mergedDescription, qty,
+  }
+}
+
+export function quoteGroups(items) {
+  const products = (items || []).filter(it => (it.line_type || 'product') === 'product')
+  return products.map(p => groupRollup(p, items))
+}
+
+export function lineCustomerTotal(item) {
+  if (item.line_type === 'upgrade') return 0
+  if (item.billing === 'off_invoice') return 0
+  const q = Number(item.quantity) || 0
+  const p = Number(item.customer_price ?? item.unit_price) || 0
+  return Math.round(q * p * 100) / 100
+}
+
 export function quoteCustomerTotal(items) {
-  return items.reduce((s, it) => s + lineCustomerTotal(it), 0)
+  const groups = quoteGroups(items)
+  const productCust = groups.reduce((s, g) => s + (g.customerTotal || 0), 0)
+  const charges = (items || []).filter(it => it.line_type === 'charge')
+  const chargeCust = charges.reduce((s, it) => {
+    if (it.billing === 'off_invoice') return s
+    return s + Math.round((Number(it.quantity) || 0) * (Number(it.customer_price) || 0) * 100) / 100
+  }, 0)
+  return Math.round((productCust + chargeCust) * 100) / 100
 }
 
 export function quoteTransferTotal(items) {
-  return items.reduce((s, it) => s + lineTransferTotal(it), 0)
+  return (items || []).reduce((s, it) => s + lineTransferTotal(it), 0)
 }
 
 export function quoteMargin(items) {
   const sell = quoteCustomerTotal(items)
   const cost = quoteTransferTotal(items)
   const m = Math.round((sell - cost) * 100) / 100
-  const pct = sell > 0 ? Math.round((m / sell) * 1000) / 10 : 0
+  const pct = cost > 0 ? Math.round((m / cost) * 1000) / 10 : (sell > 0 ? 100 : 0)
   return { amount: m, pct }
 }
 
@@ -84,50 +158,54 @@ function normalizeItem(it) {
     id: it.id || 'tmp_' + Math.random().toString(36).slice(2, 9),
     transfer_price: it.transfer_price ?? it.cost_price ?? '',
     customer_price: it.customer_price ?? it.unit_price ?? '',
+    margin_pct: it.margin_pct ?? '',
+    min_margin_pct: it.min_margin_pct ?? '',
     line_type: it.line_type || 'product',
     billing: it.billing || 'on_bill',
   }
 }
 
 export async function loadQuotesForOpp(opportunityId) {
-  const { data, error } = await supabase
-    .from('quotations')
-    .select('*, quotation_items(*)')
-    .eq('opportunity_id', opportunityId)
-    .order('version', { ascending: false })
-
-  if (!error) {
-    const quotes = (data || []).map(q => ({
-      ...q,
-      quotation_no: q.quotation_no || q.metadata?.quotation_no || `V${q.version}`,
-      quotation_items: (q.quotation_items || [])
-        .map(it => normalizeItem({
-          ...it,
-          customer_price: it.unit_price,
-          transfer_price: it.cost_price,
-          line_type: it.notes?.startsWith('[upgrade]') ? 'upgrade' : it.notes?.startsWith('[charge]') ? 'charge' : 'product',
-        }))
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
-    }))
-    return { quotes, error: null, storage: 'table' }
-  }
-
-  if (!isMissingTable(error)) {
-    return { quotes: [], error, storage: 'table' }
-  }
+  if (!opportunityId) return { quotes: [], error: { message: 'No opportunity id' }, storage: 'metadata' }
 
   const { data: opp, error: oppErr } = await supabase
     .from('opportunities')
     .select('id, metadata')
     .eq('id', opportunityId)
     .single()
-  if (oppErr) return { quotes: [], error: oppErr, storage: 'metadata' }
-  const quotes = (Array.isArray(opp?.metadata?.quotes) ? opp.metadata.quotes : []).map(q => ({
-    ...q,
-    quotation_items: (q.quotation_items || []).map(normalizeItem),
-  }))
-  quotes.sort((a, b) => (b.version || 0) - (a.version || 0))
-  return { quotes, error: null, storage: 'metadata' }
+
+  if (!oppErr && opp) {
+    const quotes = (Array.isArray(opp?.metadata?.quotes) ? opp.metadata.quotes : []).map(q => ({
+      ...q,
+      quotation_items: (q.quotation_items || []).map(normalizeItem),
+    }))
+    quotes.sort((a, b) => (b.version || 0) - (a.version || 0))
+    if (quotes.length) return { quotes, error: null, storage: 'metadata' }
+  }
+
+  const { data, error } = await supabase
+    .from('quotations')
+    .select('*, quotation_items(*)')
+    .eq('opportunity_id', opportunityId)
+    .order('version', { ascending: false })
+
+  if (!error && data?.length) {
+    const quotes = data.map(q => ({
+      ...q,
+      quotation_no: q.quotation_no || `V${q.version}`,
+      quotation_items: (q.quotation_items || [])
+        .map(it => normalizeItem({
+          ...it,
+          customer_price: it.unit_price,
+          transfer_price: it.cost_price,
+        }))
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
+    }))
+    return { quotes, error: null, storage: 'table' }
+  }
+
+  if (oppErr && !isMissingTable(error)) return { quotes: [], error: oppErr, storage: 'metadata' }
+  return { quotes: [], error: null, storage: 'metadata' }
 }
 
 function nextQuoteNo(existingQuotes) {
@@ -141,10 +219,12 @@ function nextQuoteNo(existingQuotes) {
   return prefix + String(max + 1).padStart(4, '0')
 }
 
-async function saveToMetadata(opts) {
+export async function saveQuotation(opts) {
+  if (!opts.opportunityId) return { quote: null, error: { message: 'Missing opportunity id' } }
+
   const { data: opp, error: loadErr } = await supabase
     .from('opportunities')
-    .select('id, metadata')
+    .select('id, metadata, company_id')
     .eq('id', opts.opportunityId)
     .single()
   if (loadErr) return { quote: null, error: loadErr }
@@ -162,29 +242,42 @@ async function saveToMetadata(opts) {
   const customerTotal = quoteCustomerTotal(items)
   const transferTotal = quoteTransferTotal(items)
   const margin = quoteMargin(items)
+  const groups = quoteGroups(items)
 
   const id = 'q_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-  const quotation_no = opts.quotation_no || nextQuoteNo(quotes)
+  const version = opts.version || 1
+  const quotation_no =
+    opts.quotation_no ||
+    (opts.supersedePreviousId
+      ? (quotes.find(q => q.id === opts.supersedePreviousId)?.quotation_no || nextQuoteNo(quotes))
+      : nextQuoteNo(quotes))
+
+  const idMap = {}
+  items.forEach((it, i) => {
+    const newId = String(it.id || '').startsWith('tmp_') ? id + '_i' + i : it.id
+    idMap[it.id] = newId
+  })
 
   const rowItems = items
     .filter(it => (it.product_name || '').trim() || it.line_type === 'charge')
     .map((it, i) => ({
       ...it,
-      id: it.id?.startsWith('tmp_') ? id + '_i' + i : it.id,
+      id: idMap[it.id] || it.id,
+      parent_id: it.parent_id && idMap[it.parent_id] ? idMap[it.parent_id] : it.parent_id,
       quantity: Number(it.quantity) || 1,
       transfer_price: it.transfer_price !== '' && it.transfer_price != null ? Number(it.transfer_price) : null,
       customer_price: it.customer_price !== '' && it.customer_price != null ? Number(it.customer_price) : null,
-      line_total: lineCustomerTotal(it),
-      cost_total: lineTransferTotal(it),
+      margin_pct: it.margin_pct !== '' && it.margin_pct != null ? Number(it.margin_pct) : null,
+      min_margin_pct: it.min_margin_pct !== '' && it.min_margin_pct != null ? Number(it.min_margin_pct) : null,
       sort_order: i,
     }))
 
   const quote = {
     id,
     opportunity_id: opts.opportunityId,
-    company_id: opts.companyId,
+    company_id: opts.companyId || opp.company_id,
     quotation_no,
-    version: opts.version || 1,
+    version,
     status: opts.status || 'draft',
     validity_date: opts.validity_date || null,
     delivery_tat: opts.delivery_tat || null,
@@ -199,6 +292,15 @@ async function saveToMetadata(opts) {
     margin_pct: margin.pct,
     currency: 'INR',
     notes: opts.notes || null,
+    commercial_lines: groups.map(g => ({
+      description: g.mergedDescription,
+      transfer_total: g.transferTotal,
+      customer_total: g.customerTotal,
+      margin_pct: g.marginPct,
+      min_margin_pct: g.minMarginPct,
+      below_min: g.belowMin,
+      upgrade_count: g.upgrades.length,
+    })),
     quotation_items: rowItems,
     created_at: new Date().toISOString(),
   }
@@ -211,72 +313,21 @@ async function saveToMetadata(opts) {
   const { error } = await supabase.from('opportunities').update(patch).eq('id', opts.opportunityId)
   if (error) return { quote: null, error }
 
-  await logActivity({
-    entityType: 'quotation',
-    entityId: opts.opportunityId,
-    action: (opts.version || 1) > 1 ? 'quote_revised' : 'quote_created',
-    summary: `${quotation_no} V${opts.version} · Cust ₹${customerTotal.toLocaleString()} · Xfer ₹${transferTotal.toLocaleString()} · Mgn ${margin.pct}%`,
-    payload: { quotation_no, version: opts.version, customerTotal, transferTotal },
-  })
+  try {
+    await logActivity({
+      entityType: 'quotation',
+      entityId: opts.opportunityId,
+      action: version > 1 ? 'quote_revised' : 'quote_created',
+      summary: `${quotation_no} V${version} · Cust ₹${customerTotal.toLocaleString()} · Xfer ₹${transferTotal.toLocaleString()}`,
+      payload: { quotation_no, version, customerTotal, transferTotal },
+    })
+  } catch (_) {}
 
   return { quote, error: null, storage: 'metadata' }
 }
 
-export async function saveQuotation(opts) {
-  const metaResult = await saveToMetadata(opts)
-  if (!metaResult.error) return metaResult
-
-  const items = (opts.items || []).map(normalizeItem)
-  const customerTotal = quoteCustomerTotal(items)
-  const payload = {
-    opportunity_id: opts.opportunityId,
-    company_id: opts.companyId,
-    version: opts.version || 1,
-    status: opts.status || 'draft',
-    validity_date: opts.validity_date || null,
-    delivery_tat: opts.delivery_tat || null,
-    payment_terms: opts.payment_terms || null,
-    transport_terms: opts.transport_terms || null,
-    special_terms: opts.special_terms || null,
-    revision_reason: opts.revision_reason || null,
-    no_regret_price: !!opts.no_regret_price,
-    total_value: customerTotal,
-    currency: 'INR',
-    notes: opts.notes || null,
-    state: 'active',
-  }
-  const { data: quote, error } = await supabase.from('quotations').insert(payload).select('*').single()
-  if (error) return { quote: null, error: metaResult.error || error }
-
-  const rows = items.filter(it => (it.product_name || '').trim()).map((it, i) => ({
-    quotation_id: quote.id,
-    product_name: it.product_name.trim(),
-    specification: it.specification || null,
-    brand: it.brand || null,
-    model_part_no: it.model_part_no || null,
-    quantity: Number(it.quantity) || 1,
-    unit_price: it.customer_price !== '' ? Number(it.customer_price) : null,
-    line_total: lineCustomerTotal(it),
-    cost_price: it.transfer_price !== '' ? Number(it.transfer_price) : null,
-    vendor: it.vendor || null,
-    sort_order: i,
-    notes: it.line_type !== 'product' ? `[${it.line_type}] ${it.notes || ''}` : (it.notes || null),
-  }))
-  if (rows.length) await supabase.from('quotation_items').insert(rows)
-  if (opts.supersedePreviousId) {
-    await supabase.from('quotations').update({ status: 'superseded' }).eq('id', opts.supersedePreviousId)
-  }
-  if (opts.opportunityId && customerTotal > 0) {
-    await supabase.from('opportunities').update({ deal_size: customerTotal }).eq('id', opts.opportunityId)
-  }
-  return { quote, error: null, storage: 'table' }
-}
-
 export async function updateQuoteStatus(id, status, opportunityId) {
-  if (!opportunityId) {
-    const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
-    return { error }
-  }
+  if (!opportunityId) return { error: { message: 'Missing opportunity id' } }
   const { data: opp, error: loadErr } = await supabase
     .from('opportunities').select('metadata').eq('id', opportunityId).single()
   if (loadErr) return { error: loadErr }
@@ -284,8 +335,9 @@ export async function updateQuoteStatus(id, status, opportunityId) {
   meta.quotes = (meta.quotes || []).map(q => (q.id === id ? { ...q, status } : q))
   const { error } = await supabase.from('opportunities').update({ metadata: meta }).eq('id', opportunityId)
   if (!error) {
-    await logActivity({ entityType: 'quotation', entityId: id, action: 'quote_status', summary: `Status → ${status}` })
+    try {
+      await logActivity({ entityType: 'quotation', entityId: id, action: 'quote_status', summary: `Status → ${status}` })
+    } catch (_) {}
   }
-  await supabase.from('quotations').update({ status }).eq('id', id)
   return { error }
 }

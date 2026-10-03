@@ -3,6 +3,7 @@ import { Badge } from '../ui'
 import {
   emptyItem, emptyUpgrade, emptyCharge, groupRollup, quoteGroups,
   loadQuotesForOpp, saveQuotation, updateQuoteStatus,
+  formatQuoteForExcel, DEFAULT_TAX_PCT,
 } from '../lib/quotations'
 import { QuoteEditor } from './QuoteEditor'
 
@@ -16,6 +17,26 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(blankForm())
   const [expandedId, setExpandedId] = useState(null)
+  const [taxPct, setTaxPct] = useState(DEFAULT_TAX_PCT)
+  const [copyOk, setCopyOk] = useState('')
+
+  async function copyExcel(q) {
+    const text = formatQuoteForExcel(q, taxPct)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyOk('Copied — paste into Excel (Ctrl+V)')
+      setTimeout(() => setCopyOk(''), 3500)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy'); setCopyOk('Copied — paste into Excel') }
+      catch { setError('Could not copy — select the text manually') }
+      document.body.removeChild(ta)
+      setTimeout(() => setCopyOk(''), 3500)
+    }
+  }
 
   function blankForm() {
     return {
@@ -113,8 +134,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       const filled = form.items.filter(it => (it.product_name || '').trim())
       if (!filled.length) { setError('Add at least one product or charge with a name.'); return }
       if (mode === 'revise' && !(form.revision_reason || '').trim()) {
-        setError('Enter a revision reason (what changed), then Save again.'); return
-      }
+        setError('Enter a revision reason (what changed), then Save again.'); return }
       if (!opportunity?.id) { setError('Deal not loaded — close and reopen.'); return }
 
       let items = form.items.map(it => ({ ...it }))
@@ -185,6 +205,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       </div>
       {error && <div className="notice" style={{ background: '#fef2f2', borderColor: '#fecaca', color: '#991b1b' }}>{error}</div>}
       {ok && <div className="notice" style={{ background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' }}>{ok}</div>}
+      {copyOk && <div className="notice" style={{ background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' }}>{copyOk}</div>}
       {mode && (
         <QuoteEditor
           form={form} setForm={setForm} mode={mode} baseQuote={baseQuote} saving={saving}
@@ -201,10 +222,6 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
             {quotes.map(q => {
               const open = expandedId === q.id
               const items = q.quotation_items || []
-              const lines = q.commercial_lines || quoteGroups(items).map(g => ({
-                description: g.mergedDescription, transfer_total: g.transferTotal,
-                customer_total: g.customerTotal, margin_pct: g.marginPct, upgrade_count: g.upgrades.length,
-              }))
               return (
                 <div key={q.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, background: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -226,16 +243,89 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                   </div>
                   {open && (
                     <div style={{ marginTop: 10, fontSize: 12 }}>
-                      {lines.map((line, i) => (
-                        <div key={i} style={{ marginBottom: 8, padding: 8, background: '#f8fafc', borderRadius: 6 }}>
-                          <div style={{ fontWeight: 600 }}>{line.description}</div>
-                          <div style={{ color: '#64748b' }}>
-                            TP ₹{Number(line.transfer_total || 0).toLocaleString()} → Cust ₹{Number(line.customer_total || 0).toLocaleString()}
-                            {line.margin_pct != null ? ` · Mgn ${line.margin_pct}%` : ''}
-                            {line.upgrade_count ? ` · ${line.upgrade_count} upgrade(s)` : ''}
-                          </div>
-                        </div>
-                      ))}
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                        <label style={{ fontSize: 12, color: '#64748b' }}>
+                          Tax %{' '}
+                          <input className="input" type="number" style={{ width: 64, display: 'inline-block', padding: '2px 6px' }}
+                            value={taxPct} onChange={e => setTaxPct(e.target.value)} />
+                        </label>
+                        <button type="button" className="btn primary" style={{ fontSize: 11, padding: '3px 10px' }}
+                          onClick={() => copyExcel(q)}>Copy for Excel</button>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+                        Product name with upgrades: base + each upgrade joined (e.g. “Laptop (Dell) + 16GB RAM [incl. 1 upgrade]”).
+                      </div>
+                      <table className="table" style={{ fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th>Item name</th>
+                            <th>Customer Rate</th>
+                            <th>Qty</th>
+                            <th>Tax %</th>
+                            <th>Tax Amount</th>
+                            <th>Total amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const groups = quoteGroups(items)
+                            const charges = items.filter(it => it.line_type === 'charge')
+                            const tax = Number(taxPct) || 0
+                            let sub = 0
+                            const body = []
+                            groups.forEach((g, i) => {
+                              const qty = g.qty || 1
+                              const lineTotal = Number(g.customerTotal) || 0
+                              const rate = qty > 0 ? Math.round((lineTotal / qty) * 100) / 100 : lineTotal
+                              const taxAmt = Math.round(lineTotal * tax / 100 * 100) / 100
+                              const total = Math.round((lineTotal + taxAmt) * 100) / 100
+                              sub += lineTotal
+                              body.push(
+                                <tr key={'g'+i}>
+                                  <td style={{ fontWeight: 600, maxWidth: 320 }}>{g.mergedDescription}</td>
+                                  <td>₹{rate.toLocaleString()}</td>
+                                  <td>{qty}</td>
+                                  <td>{tax}</td>
+                                  <td>₹{taxAmt.toLocaleString()}</td>
+                                  <td>₹{total.toLocaleString()}</td>
+                                </tr>
+                              )
+                              g.upgrades.forEach((u, ui) => {
+                                body.push(
+                                  <tr key={'u'+i+'-'+ui} style={{ background: '#f0f9ff' }}>
+                                    <td style={{ paddingLeft: 16, color: '#475569' }}>↳ upgrade: {(u.product_name || '').trim() || 'Upgrade'}{[u.brand, u.specification].filter(Boolean).length ? ` (${[u.brand, u.specification].filter(Boolean).join(' ')})` : ''}</td>
+                                    <td style={{ color: '#94a3b8' }} colSpan={5}>rolls into parent · TP ₹{((Number(u.quantity)||0)*(Number(u.transfer_price)||0)).toLocaleString()}</td>
+                                  </tr>
+                                )
+                              })
+                            })
+                            charges.forEach((c, i) => {
+                              const qty = Number(c.quantity) || 1
+                              const rate = Number(c.customer_price) || 0
+                              const lineTotal = c.billing === 'off_invoice' ? 0 : Math.round(qty * rate * 100) / 100
+                              const taxAmt = Math.round(lineTotal * tax / 100 * 100) / 100
+                              const total = Math.round((lineTotal + taxAmt) * 100) / 100
+                              if (c.billing !== 'off_invoice') sub += lineTotal
+                              body.push(
+                                <tr key={'c'+i}>
+                                  <td>{(c.product_name || c.charge_kind || 'Charge')}{c.billing === 'off_invoice' ? ' (off invoice)' : ''}</td>
+                                  <td>₹{rate.toLocaleString()}</td>
+                                  <td>{qty}</td>
+                                  <td>{c.billing === 'off_invoice' ? 0 : tax}</td>
+                                  <td>₹{taxAmt.toLocaleString()}</td>
+                                  <td>₹{total.toLocaleString()}</td>
+                                </tr>
+                              )
+                            })
+                            const taxTotal = Math.round(sub * tax / 100 * 100) / 100
+                            const grand = Math.round((sub + taxTotal) * 100) / 100
+                            body.push(<tr key="sub"><td colSpan={5} style={{ textAlign: 'right', fontWeight: 600 }}>Subtotal (ex-tax)</td><td>₹{sub.toLocaleString()}</td></tr>)
+                            body.push(<tr key="tax"><td colSpan={5} style={{ textAlign: 'right' }}>Tax ({tax}%)</td><td>₹{taxTotal.toLocaleString()}</td></tr>)
+                            body.push(<tr key="grand"><td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>Grand total</td><td style={{ fontWeight: 700 }}>₹{grand.toLocaleString()}</td></tr>)
+                            return body
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>

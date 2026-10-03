@@ -4,6 +4,24 @@ export const LIFECYCLE = ['prospect', 'active', 'repeat', 'dormant', 'lost']
 export const RESEARCH_STATUS = ['NOT_RESEARCHED', 'IN_PROGRESS', 'RESEARCHED', 'NEEDS_UPDATE']
 export const ROLES = ['Decision Maker', 'Procurement', 'IT', 'Finance', 'Technical Evaluator', 'Influencer', 'End User', 'Other']
 export const OPP_STAGES = ['requirement', 'qualification', 'discovery', 'solution', 'quotation', 'negotiation', 'decision', 'won', 'lost']
+/** Stage meaning for Hexagon B2B commercial process (buyer progress, not internal busy-work) */
+export const OPP_STAGE_META = {
+  requirement:   { label: 'Requirement',   pct: 10,  exit: 'Buyer has a stated need Hexagon can address' },
+  qualification: { label: 'Qualification', pct: 20,  exit: 'ICP fit, budget path, and a stakeholder confirmed' },
+  discovery:     { label: 'Discovery',     pct: 35,  exit: 'Pain, success criteria, and buying process understood' },
+  solution:      { label: 'Solution',      pct: 50,  exit: 'Proposed offer maps to their requirement' },
+  quotation:     { label: 'Quotation',     pct: 65,  exit: 'Formal commercial quote shared; follow-up owned' },
+  negotiation:   { label: 'Negotiation',   pct: 80,  exit: 'Terms under discussion; objections in play' },
+  decision:      { label: 'Decision',      pct: 90,  exit: 'Awaiting final yes / internal approval' },
+  won:           { label: 'Won',           pct: 100, exit: 'Order / commitment confirmed' },
+  lost:          { label: 'Lost',          pct: 0,   exit: 'Closed without win — capture reason' },
+}
+export function oppStageLabel(s) {
+  return OPP_STAGE_META[s]?.label || s
+}
+export function isOppOpen(stage) {
+  return stage !== 'won' && stage !== 'lost'
+}
 export const TASK_STATUS = ['open', 'in_progress', 'completed', 'cancelled']
 /** Closed statuses (DB check constraint uses completed, not done) */
 export const TASK_CLOSED = ['completed', 'done', 'cancelled']

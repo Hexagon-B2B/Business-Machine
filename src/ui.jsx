@@ -24,16 +24,35 @@ export function FilterTabs({ value, options, onChange }) {
   )
 }
 
-export function DataTable({ columns, rows, sortKey, sortDir, onSort, onRowClick, page, pageSize, total, onPage, empty }) {
+export function DataTable({
+  columns, rows, sortKey, sortDir, onSort, onRowClick,
+  page, pageSize, total, onPage, empty,
+  selectable = false, selectedIds = null, onToggleSelect, onToggleSelectAll,
+}) {
   const pages = Math.max(1, Math.ceil((total || 0) / pageSize))
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1
   const to = Math.min(page * pageSize, total || 0)
+  const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || [])
+  const allOnPageSelected = rows.length > 0 && rows.every(r => selected.has(r.id))
+  const someOnPageSelected = rows.some(r => selected.has(r.id))
+
   return (
     <div className="card" style={{ padding: 0 }}>
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
+              {selectable && (
+                <th style={{ width: 40 }} onClick={e => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={allOnPageSelected}
+                    ref={el => { if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected }}
+                    onChange={() => onToggleSelectAll && onToggleSelectAll(rows, !allOnPageSelected)}
+                    aria-label="Select all on page"
+                  />
+                </th>
+              )}
               {columns.map(c => (
                 <th key={c.key} onClick={() => onSort && onSort(c.key)}>
                   {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -43,9 +62,19 @@ export function DataTable({ columns, rows, sortKey, sortDir, onSort, onRowClick,
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={columns.length}><div className="empty">{empty || 'No records'}</div></td></tr>
+              <tr><td colSpan={columns.length + (selectable ? 1 : 0)}><div className="empty">{empty || 'No records'}</div></td></tr>
             ) : rows.map(r => (
               <tr key={r.id} style={{ cursor: onRowClick ? 'pointer' : 'default' }} onClick={() => onRowClick && onRowClick(r)}>
+                {selectable && (
+                  <td onClick={e => e.stopPropagation()} style={{ width: 40 }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(r.id)}
+                      onChange={() => onToggleSelect && onToggleSelect(r.id)}
+                      aria-label="Select row"
+                    />
+                  </td>
+                )}
                 {columns.map(c => <td key={c.key} style={c.bold ? { fontWeight: 600 } : undefined}>{c.render ? c.render(r) : (r[c.key] || '—')}</td>)}
               </tr>
             ))}

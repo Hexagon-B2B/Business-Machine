@@ -46,7 +46,7 @@ export default function App() {
     ['meetings', 'Meetings & Calls'],
     ['opportunities', 'Opportunities'],
     ['research', 'Research & Signals'],
-    ['trash', 'Trash'],
+    ['trash', 'Deleted items'],
   ]
 
   const pageLabel = page === 'company'

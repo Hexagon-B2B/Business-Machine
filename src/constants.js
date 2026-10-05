@@ -63,6 +63,8 @@ export function isTaskOpen(status) {
 }
 export const TASK_PRIORITY = ['low', 'medium', 'high']
 export const SIGNAL_TYPES = ['news', 'hiring', 'funding', 'expansion', 'tender', 'leadership', 'other']
+/** Signal review statuses used by Research & Signals page */
+export const SIGNAL_REVIEW = ['pending', 'relevant', 'not_relevant', 'actioned']
 export const PAGE_SIZE = 25
 export const MISSING_COMPANY_FIELDS = [
   ['industry', 'Industry'],

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { PageHead, DataTable, Badge } from '../ui'
 
 export default function MeetingsCalls({ go }) {
   const [items, setItems] = useState([])
@@ -10,17 +11,19 @@ export default function MeetingsCalls({ go }) {
 
   useEffect(() => { load() }, [])
 
-  function showFlash(msg) {
-    setFlash(msg)
+  function showFlash(m) {
+    setFlash(m)
     setTimeout(() => setFlash(''), 4000)
   }
 
   async function load() {
     setLoading(true)
     const { data, error } = await supabase.from('meetings_calls')
-      .select('id, type, subject, outcome, next_action, next_action_due_at, scheduled_at, company_id, companies(name)')
-      .order('scheduled_at', { ascending: false }).limit(60)
-    if (error) showFlash('Load failed: ' + error.message)
+      .select('id, type, subject, outcome, next_action, scheduled_at, company_id, companies(name)')
+      .neq('state', 'deleted')
+      .order('scheduled_at', { ascending: false })
+      .limit(200)
+    if (error) console.error(error)
     setItems(data || [])
     setLoading(false)
   }
@@ -34,46 +37,30 @@ export default function MeetingsCalls({ go }) {
     })
   }
 
-  function toggleSelectAll(selectAll) {
-    if (selectAll) setSelected(new Set(items.map(i => i.id)))
-    else setSelected(new Set())
+  function toggleAll() {
+    if (selected.size === items.length) setSelected(new Set())
+    else setSelected(new Set(items.map(i => i.id)))
   }
 
   async function deleteSelected() {
     const ids = [...selected]
     if (!ids.length) return
-    if (!confirm(`Delete ${ids.length} selected meeting/call(s)? This cannot be undone.`)) return
+    if (!confirm(`Move ${ids.length} selected meeting/call(s) to Deleted? You can restore later from Deleted items.`)) return
     setDeleting(true)
-    let deletedIds = []
-    let errMsg = null
-    {
-      const { data, error } = await supabase.from('meetings_calls').delete().in('id', ids).select('id')
-      if (error) errMsg = error.message
-      else deletedIds = (data || []).map(r => r.id)
-    }
-    if (errMsg && /permission|policy|returning/i.test(errMsg)) {
-      const { error } = await supabase.from('meetings_calls').delete().in('id', ids)
-      if (error) {
-        setDeleting(false)
-        showFlash('Delete failed: ' + error.message)
-        return
-      }
-      deletedIds = ids
-      errMsg = null
-    }
+    const { data, error } = await supabase.from('meetings_calls')
+      .update({ state: 'deleted', deleted_at: new Date().toISOString() })
+      .in('id', ids)
+      .select('id')
     setDeleting(false)
-    if (errMsg) {
-      showFlash('Delete failed: ' + errMsg)
+    if (error) {
+      showFlash('Delete failed: ' + error.message)
       return
     }
-    const removed = new Set(deletedIds)
+    const removed = new Set((data || []).map(r => r.id))
     setItems(prev => prev.filter(i => !removed.has(i.id)))
     setSelected(new Set())
-    if (removed.size === 0) {
-      showFlash('No meetings were deleted. Check Supabase RLS DELETE policy on meetings_calls.')
-    } else {
-      showFlash(`Deleted ${removed.size} meeting/call(s).`)
-    }
+    if (removed.size === 0) showFlash('No meetings were moved to Deleted. Check RLS UPDATE on meetings_calls.')
+    else showFlash(`Moved ${removed.size} meeting/call(s) to Deleted.`)
     await load()
   }
 
@@ -92,70 +79,41 @@ export default function MeetingsCalls({ go }) {
             <>
               <span style={{ fontSize: 12, color: '#64748b' }}>{selected.size} selected</span>
               <button type="button" className="btn danger" disabled={deleting} onClick={deleteSelected}>
-                {deleting ? 'Deleting…' : `Delete selected (${selected.size})`}
+                {deleting ? 'Deleting…' : (`Move to Deleted (${selected.size})`)}
               </button>
               <button type="button" className="btn" onClick={() => setSelected(new Set())}>Clear</button>
             </>
           )}
-          <button className="btn primary" onClick={() => go('companies')}>Go to Companies →</button>
         </div>
       </div>
 
       {flash && (
-        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') ? '#fef2f2' : '#ecfdf5', color: flash.includes('failed') ? '#991b1b' : '#065f46' }}>
+        <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: flash.toLowerCase().includes('fail') ? '#fef2f2' : '#ecfdf5', color: flash.toLowerCase().includes('fail') ? '#991b1b' : '#065f46', fontSize: 13 }}>
           {flash}
         </div>
       )}
 
-      {loading ? <div className="loading">Loading...</div> : items.length === 0 ? (
-        <div className="empty">No meetings or calls yet. Open a Company and log from there.</div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 40 }}>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
-                    onChange={() => toggleSelectAll(!allSelected)}
-                    aria-label="Select all"
-                  />
-                </th>
-                <th>Type</th>
-                <th>Subject</th>
-                <th>Company</th>
-                <th>Outcome</th>
-                <th>Next Action</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(i => (
-                <tr key={i.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(i.id)}
-                      onChange={() => toggleSelect(i.id)}
-                      aria-label="Select row"
-                    />
-                  </td>
-                  <td><span className="badge blue">{i.type}</span></td>
-                  <td style={{ fontWeight: 600 }}>{i.subject}</td>
-                  <td>{i.companies?.name ? (
-                    <button style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
-                      onClick={() => go('company', i.company_id)}>{i.companies.name}</button>
-                  ) : '—'}</td>
-                  <td>{i.outcome || '—'}</td>
-                  <td style={{ color: i.next_action ? '#1e40af' : undefined }}>{i.next_action || '—'}</td>
-                  <td>{i.scheduled_at ? new Date(i.scheduled_at).toLocaleDateString() : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {loading ? <div className="loading">Loading…</div> : (
+        <DataTable
+          rows={items}
+          selectable
+          selectedIds={selected}
+          onToggleRow={toggleSelect}
+          onToggleAll={toggleAll}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          columns={[
+            { key: 'type', label: 'Type', render: r => <Badge tone="blue">{r.type}</Badge> },
+            { key: 'subject', label: 'Subject', render: r => <span style={{ fontWeight: 600 }}>{r.subject}</span> },
+            { key: 'company', label: 'Company', render: r => r.companies?.name ? (
+              <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
+                onClick={() => go('company', r.company_id)}>{r.companies.name}</button>
+            ) : '—' },
+            { key: 'outcome', label: 'Outcome', render: r => r.outcome || '—' },
+            { key: 'next_action', label: 'Next action', render: r => r.next_action || '—' },
+            { key: 'when', label: 'When', render: r => r.scheduled_at ? new Date(r.scheduled_at).toLocaleString() : '—' },
+          ]}
+        />
       )}
     </div>
   )

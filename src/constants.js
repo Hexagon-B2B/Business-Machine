@@ -10,12 +10,12 @@ export const LIFECYCLE = [
   'lost',
 ]
 export const LIFECYCLE_META = {
-  prospect_no_contact: { label: 'Prospect — trying, not found a contact', short: 'No contact' },
-  first_contact:       { label: '1st contact only',                      short: '1st contact' },
-  spoc_identified:     { label: 'SPOC identified',                       short: 'SPOC ID' },
-  rfq_only:            { label: 'RFQ only',                              short: 'RFQ only' },
-  active:              { label: 'Active',                                short: 'Active' },
-  lost:                { label: 'Lost',                                  short: 'Lost' },
+  prospect_no_contact: { label: 'Prospect - No Contact', short: 'No Contact' },
+  first_contact:       { label: '1st Contact Only',      short: '1st Contact' },
+  spoc_identified:     { label: 'SPOC Identified',       short: 'SPOC ID' },
+  rfq_only:            { label: 'RFQ Only',              short: 'RFQ Only' },
+  active:              { label: 'Active',                short: 'Active' },
+  lost:                { label: 'Lost',                  short: 'Lost' },
 }
 export function lifecycleLabel(s) {
   return LIFECYCLE_META[s]?.label || s || '—'

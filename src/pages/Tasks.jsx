@@ -46,6 +46,7 @@ export default function Tasks({ go }) {
     const to = from + PAGE_SIZE - 1
     let q = supabase.from('tasks')
       .select('id, title, description, priority, status, due_at, company_id, source, metadata, state, companies(name)', { count: 'exact' })
+      .neq('state', 'deleted')
       .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
       .range(from, to)
     if (filter === 'open') q = q.eq('status', 'open')
@@ -96,41 +97,23 @@ export default function Tasks({ go }) {
   async function deleteSelected() {
     const ids = [...selected]
     if (!ids.length) return
-    if (!confirm(`Delete ${ids.length} selected task(s)? This cannot be undone.`)) return
+    if (!confirm(`Move ${ids.length} selected task(s) to Deleted? You can restore later from Deleted items.`)) return
     setDeleting(true)
-    let deletedIds = []
-    let errMsg = null
-    {
-      const { data, error } = await supabase.from('tasks').delete().in('id', ids).select('id')
-      if (error) errMsg = error.message
-      else deletedIds = (data || []).map(r => r.id)
-    }
-    if (errMsg && /permission|policy|returning/i.test(errMsg)) {
-      const { error } = await supabase.from('tasks').delete().in('id', ids)
-      if (error) {
-        setDeleting(false)
-        showFlash('Delete failed: ' + error.message)
-        return
-      }
-      deletedIds = ids
-      errMsg = null
-    }
+    const { data, error } = await supabase.from('tasks')
+      .update({ state: 'deleted', deleted_at: new Date().toISOString() })
+      .in('id', ids)
+      .select('id')
     setDeleting(false)
-    if (errMsg) {
-      showFlash('Delete failed: ' + errMsg)
+    if (error) {
+      showFlash('Delete failed: ' + error.message)
       return
     }
-    const removed = new Set(deletedIds)
+    const removed = new Set((data || []).map(r => r.id))
     setTasks(prev => prev.filter(t => !removed.has(t.id)))
     setTotal(t => Math.max(0, (t || 0) - removed.size))
     setSelected(new Set())
-    if (removed.size === 0) {
-      showFlash('No tasks were deleted. Check Supabase RLS DELETE policy on tasks.')
-    } else if (removed.size < ids.length) {
-      showFlash(`Deleted ${removed.size} of ${ids.length} task(s). Some may be blocked by related data or RLS.`)
-    } else {
-      showFlash(`Deleted ${removed.size} task(s).`)
-    }
+    if (removed.size === 0) showFlash('No tasks were moved to Deleted. Check RLS UPDATE on tasks.')
+    else showFlash(`Moved ${removed.size} task(s) to Deleted.`)
     await load()
   }
 
@@ -318,7 +301,7 @@ export default function Tasks({ go }) {
           <>
             <span style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>{selected.size} selected</span>
             <button type="button" className="btn danger" disabled={deleting} onClick={deleteSelected} style={{ fontSize: 12 }}>
-              {deleting ? 'Deleting…' : `Delete selected (${selected.size})`}
+              {deleting ? 'Deleting…' : `Move to Deleted (${selected.size})`}
             </button>
             <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setSelected(new Set())}>Clear selection</button>
           </>

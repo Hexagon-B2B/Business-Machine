@@ -323,11 +323,32 @@ export default function Opportunities({ go }) {
               </select>
             </Field>
             <Field label="Opportunity name *">
-              <input className="input" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <input className="input" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. CCTV upgrade – HQ" />
             </Field>
             <Field label="Requirement *">
-              <textarea className="input" rows={3} required value={form.requirement_description} onChange={e => setForm({ ...form, requirement_description: e.target.value })} />
+              <textarea className="input" rows={3} required value={form.requirement_description} onChange={e => setForm({ ...form, requirement_description: e.target.value })} placeholder="What does the buyer need? Capture in their words." />
             </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Stage">
+                <select className="input" value={form.stage || 'requirement'} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                  {OPP_STAGES.filter(s => s !== 'won' && s !== 'lost').map(s => (
+                    <option key={s} value={s}>{oppStageLabel(s)}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Deal size (₹)">
+                <input className="input" type="number" min="0" value={form.deal_size} onChange={e => setForm({ ...form, deal_size: e.target.value })} placeholder="Optional" />
+              </Field>
+            </div>
+            <Field label="Expected close">
+              <input className="input" type="date" value={form.expected_close_date} onChange={e => setForm({ ...form, expected_close_date: e.target.value })} />
+            </Field>
+            <Field label="Next action">
+              <input className="input" value={form.next_action} onChange={e => setForm({ ...form, next_action: e.target.value })} placeholder="e.g. Send brochure / Schedule discovery call" />
+            </Field>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+              Stages follow buyer progress: Requirement → Qualification → Discovery → Solution → Quotation → Negotiation → Decision → Won / Lost.
+            </p>
             <Actions saving={saving} onCancel={() => setShowCreate(false)} label="Create opportunity" />
           </form>
         </Modal>
@@ -339,14 +360,27 @@ export default function Opportunities({ go }) {
             <Field label="Name">
               <input className="input" value={selected.name || ''} onChange={e => setSelected({ ...selected, name: e.target.value })} />
             </Field>
-            <Field label="Stage">
-              <select className="input" value={selected.stage || 'requirement'} onChange={e => setSelected({ ...selected, stage: e.target.value })}>
-                {OPP_STAGES.map(s => <option key={s} value={s}>{oppStageLabel(s)}</option>)}
-              </select>
-            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Stage">
+                <select className="input" value={selected.stage || 'requirement'} onChange={e => setSelected({ ...selected, stage: e.target.value })}>
+                  {OPP_STAGES.map(s => <option key={s} value={s}>{oppStageLabel(s)}</option>)}
+                </select>
+              </Field>
+              <Field label="Deal size (₹)">
+                <input className="input" type="number" min="0" value={selected.deal_size ?? ''} onChange={e => setSelected({ ...selected, deal_size: e.target.value })} />
+              </Field>
+            </div>
             <Field label="Requirement">
               <textarea className="input" rows={2} value={selected.requirement_description || ''} onChange={e => setSelected({ ...selected, requirement_description: e.target.value })} />
             </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Expected close">
+                <input className="input" type="date" value={(selected.expected_close_date || '').toString().slice(0, 10)} onChange={e => setSelected({ ...selected, expected_close_date: e.target.value })} />
+              </Field>
+              <Field label="Next action">
+                <input className="input" value={selected.next_action || ''} onChange={e => setSelected({ ...selected, next_action: e.target.value })} />
+              </Field>
+            </div>
             {selected.stage === 'lost' && (
               <Field label="Lost reason *">
                 <input className="input" required value={selected.lost_reason || ''} onChange={e => setSelected({ ...selected, lost_reason: e.target.value })} />

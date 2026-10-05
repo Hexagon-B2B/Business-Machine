@@ -8,6 +8,7 @@ import Tasks from './pages/Tasks'
 import MeetingsCalls from './pages/MeetingsCalls'
 import Opportunities from './pages/Opportunities'
 import Research from './pages/Research'
+import Trash from './pages/Trash'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -45,6 +46,7 @@ export default function App() {
     ['meetings', 'Meetings & Calls'],
     ['opportunities', 'Opportunities'],
     ['research', 'Research & Signals'],
+    ['trash', 'Trash'],
   ]
 
   const pageLabel = page === 'company'
@@ -122,6 +124,7 @@ export default function App() {
         {page === 'meetings' && <MeetingsCalls go={go} />}
         {page === 'opportunities' && <Opportunities go={go} />}
         {page === 'research' && <Research go={go} />}
+        {page === 'trash' && <Trash go={go} />}
       </main>
     </div>
   )

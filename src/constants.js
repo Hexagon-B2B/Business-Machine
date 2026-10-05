@@ -1,6 +1,36 @@
 /** Controlled values — aligned with Supabase + V1 Data Dictionary */
 
-export const LIFECYCLE = ['prospect', 'active', 'repeat', 'dormant', 'lost']
+/** Company sales lifecycle (buyer relationship stage) */
+export const LIFECYCLE = [
+  'prospect_no_contact',
+  'first_contact',
+  'spoc_identified',
+  'rfq_only',
+  'active',
+  'lost',
+]
+export const LIFECYCLE_META = {
+  prospect_no_contact: { label: 'Prospect — no contact yet', short: 'No contact' },
+  first_contact:       { label: '1st contact only',          short: '1st contact' },
+  spoc_identified:     { label: 'SPOC identified',           short: 'SPOC ID' },
+  rfq_only:            { label: 'RFQ only',                  short: 'RFQ only' },
+  active:              { label: 'Active',                    short: 'Active' },
+  lost:                { label: 'Lost',                      short: 'Lost' },
+}
+export function lifecycleLabel(s) {
+  return LIFECYCLE_META[s]?.label || s || '—'
+}
+export function lifecycleShort(s) {
+  return LIFECYCLE_META[s]?.short || s || '—'
+}
+
+/** Contact phone kinds */
+export const PHONE_TYPES = [
+  { value: 'mobile', label: 'Mobile' },
+  { value: 'landline', label: 'Direct landline' },
+  { value: 'extension', label: 'Extension (via board)' },
+]
+
 export const RESEARCH_STATUS = ['NOT_RESEARCHED', 'IN_PROGRESS', 'RESEARCHED', 'NEEDS_UPDATE']
 export const ROLES = ['Decision Maker', 'Procurement', 'IT', 'Finance', 'Technical Evaluator', 'Influencer', 'End User', 'Other']
 export const OPP_STAGES = ['requirement', 'qualification', 'discovery', 'solution', 'quotation', 'negotiation', 'decision', 'won', 'lost']
@@ -33,40 +63,22 @@ export function isTaskOpen(status) {
 }
 export const TASK_PRIORITY = ['low', 'medium', 'high']
 export const SIGNAL_TYPES = ['news', 'hiring', 'funding', 'expansion', 'tender', 'leadership', 'other']
-export const SIGNAL_REVIEW = ['pending', 'reviewed', 'actioned', 'dismissed']
-export const MEETING_TYPES = ['call', 'meeting', 'visit', 'message']
 export const PAGE_SIZE = 25
-
 export const MISSING_COMPANY_FIELDS = [
-  ['website', 'Website'],
   ['industry', 'Industry'],
-  ['city', 'City'],
-  ['country', 'Country'],
-  ['legal_name', 'Legal name'],
   ['employee_count', 'Employee count'],
+  ['website', 'Website'],
+  ['city', 'City'],
+  ['gst_no', 'GST'],
 ]
-
 export const TRIGGER_TYPE_LABELS = {
-  signal: 'Signal',
-  quotation: 'Quotation',
-  meeting: 'Meeting',
   missing_details: 'Missing details',
-  employee_count: 'Employee scale',
-  industry: 'Industry fit',
-  news_hiring_funding: 'News / Hiring / Funding',
+  employees: 'Employees',
+  industry: 'Industry',
   research: 'Research',
-}
-
-/** Default trigger criteria — overridable via localStorage key hexagon_trigger_config */
-export const DEFAULT_TRIGGER_CONFIG = {
-  maxNew: 15,
-  employeeThreshold: 200,
-  employeeHighThreshold: 1000,
-  enableMissingDetails: true,
-  enableEmployeeCount: true,
-  enableIndustry: true,
-  enableNewsHiringFunding: true,
-  enableSignals: true,
-  enableQuotation: true,
-  enableMeeting: true,
+  signal: 'Signal',
+  quotation_followup: 'Quote follow-up',
+  news: 'News',
+  hiring: 'Hiring',
+  funding: 'Funding',
 }

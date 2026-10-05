@@ -44,15 +44,37 @@ export default function MeetingsCalls({ go }) {
     if (!ids.length) return
     if (!confirm(`Delete ${ids.length} selected meeting/call(s)? This cannot be undone.`)) return
     setDeleting(true)
-    const { error } = await supabase.from('meetings_calls').delete().in('id', ids)
+    let deletedIds = []
+    let errMsg = null
+    {
+      const { data, error } = await supabase.from('meetings_calls').delete().in('id', ids).select('id')
+      if (error) errMsg = error.message
+      else deletedIds = (data || []).map(r => r.id)
+    }
+    if (errMsg && /permission|policy|returning/i.test(errMsg)) {
+      const { error } = await supabase.from('meetings_calls').delete().in('id', ids)
+      if (error) {
+        setDeleting(false)
+        showFlash('Delete failed: ' + error.message)
+        return
+      }
+      deletedIds = ids
+      errMsg = null
+    }
     setDeleting(false)
-    if (error) {
-      showFlash('Delete failed: ' + error.message)
+    if (errMsg) {
+      showFlash('Delete failed: ' + errMsg)
       return
     }
+    const removed = new Set(deletedIds)
+    setItems(prev => prev.filter(i => !removed.has(i.id)))
     setSelected(new Set())
-    showFlash(`Deleted ${ids.length} meeting/call(s).`)
-    load()
+    if (removed.size === 0) {
+      showFlash('No meetings were deleted. Check Supabase RLS DELETE policy on meetings_calls.')
+    } else {
+      showFlash(`Deleted ${removed.size} meeting/call(s).`)
+    }
+    await load()
   }
 
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id))

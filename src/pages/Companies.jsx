@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { LIFECYCLE, PAGE_SIZE } from '../constants'
+import { LIFECYCLE, PAGE_SIZE, lifecycleLabel, lifecycleShort } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
 
 const emptyForm = {
@@ -87,7 +87,7 @@ export default function Companies({ go }) {
       gst_no: gst || null,
       industry: form.industry.trim() || null,
       notes: form.notes.trim() || null,
-      lifecycle_status: 'prospect',
+      lifecycle_status: 'prospect_no_contact',
       state: 'active',
       research_status: 'NOT_RESEARCHED',
     }).select('id').single()
@@ -106,7 +106,7 @@ export default function Companies({ go }) {
     { key: 'industry', label: 'Industry' },
     {
       key: 'lifecycle_status', label: 'Lifecycle',
-      render: r => <Badge tone={r.lifecycle_status === 'active' ? 'green' : 'gray'}>{r.lifecycle_status}</Badge>
+      render: r => <Badge tone={r.lifecycle_status === 'active' ? 'green' : r.lifecycle_status === 'lost' ? 'red' : 'gray'}>{lifecycleShort(r.lifecycle_status)}</Badge>
     },
     { key: 'gst_no', label: 'GST' },
   ]
@@ -125,7 +125,7 @@ export default function Companies({ go }) {
       </div>
 
       <FilterTabs value={lifecycle} onChange={v => { setLifecycle(v); setPage(1) }}
-        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE.map(s => ({ value: s, label: s }))] } />
+        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE.map(s => ({ value: s, label: lifecycleLabel(s) }))] } />
 
       {loading ? <div className="loading">Loading companies...</div> : (
         <DataTable

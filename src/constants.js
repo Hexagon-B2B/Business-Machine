@@ -10,12 +10,12 @@ export const LIFECYCLE = [
   'lost',
 ]
 export const LIFECYCLE_META = {
-  prospect_no_contact: { label: 'Prospect — no contact yet', short: 'No contact' },
-  first_contact:       { label: '1st contact only',          short: '1st contact' },
-  spoc_identified:     { label: 'SPOC identified',           short: 'SPOC ID' },
-  rfq_only:            { label: 'RFQ only',                  short: 'RFQ only' },
-  active:              { label: 'Active',                    short: 'Active' },
-  lost:                { label: 'Lost',                      short: 'Lost' },
+  prospect_no_contact: { label: 'Prospect — trying, not found a contact', short: 'No contact' },
+  first_contact:       { label: '1st contact only',                      short: '1st contact' },
+  spoc_identified:     { label: 'SPOC identified',                       short: 'SPOC ID' },
+  rfq_only:            { label: 'RFQ only',                              short: 'RFQ only' },
+  active:              { label: 'Active',                                short: 'Active' },
+  lost:                { label: 'Lost',                                  short: 'Lost' },
 }
 export function lifecycleLabel(s) {
   return LIFECYCLE_META[s]?.label || s || '—'
@@ -81,4 +81,17 @@ export const TRIGGER_TYPE_LABELS = {
   news: 'News',
   hiring: 'Hiring',
   funding: 'Funding',
+}
+
+/** Action Centre daily trigger scan defaults */
+export const DEFAULT_TRIGGER_CONFIG = {
+  maxTasksPerRun: 25,
+  includeMissingDetails: true,
+  includeEmployees: true,
+  includeIndustry: true,
+  includeResearch: true,
+  includeSignals: true,
+  includeQuotationFollowup: true,
+  employeeMin: 50,
+  daysSinceResearch: 90,
 }

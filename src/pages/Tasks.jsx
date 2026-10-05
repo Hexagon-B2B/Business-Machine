@@ -98,15 +98,40 @@ export default function Tasks({ go }) {
     if (!ids.length) return
     if (!confirm(`Delete ${ids.length} selected task(s)? This cannot be undone.`)) return
     setDeleting(true)
-    const { error } = await supabase.from('tasks').delete().in('id', ids)
+    let deletedIds = []
+    let errMsg = null
+    {
+      const { data, error } = await supabase.from('tasks').delete().in('id', ids).select('id')
+      if (error) errMsg = error.message
+      else deletedIds = (data || []).map(r => r.id)
+    }
+    if (errMsg && /permission|policy|returning/i.test(errMsg)) {
+      const { error } = await supabase.from('tasks').delete().in('id', ids)
+      if (error) {
+        setDeleting(false)
+        showFlash('Delete failed: ' + error.message)
+        return
+      }
+      deletedIds = ids
+      errMsg = null
+    }
     setDeleting(false)
-    if (error) {
-      showFlash('Delete failed: ' + error.message)
+    if (errMsg) {
+      showFlash('Delete failed: ' + errMsg)
       return
     }
+    const removed = new Set(deletedIds)
+    setTasks(prev => prev.filter(t => !removed.has(t.id)))
+    setTotal(t => Math.max(0, (t || 0) - removed.size))
     setSelected(new Set())
-    showFlash(`Deleted ${ids.length} task(s).`)
-    load()
+    if (removed.size === 0) {
+      showFlash('No tasks were deleted. Check Supabase RLS DELETE policy on tasks.')
+    } else if (removed.size < ids.length) {
+      showFlash(`Deleted ${removed.size} of ${ids.length} task(s). Some may be blocked by related data or RLS.`)
+    } else {
+      showFlash(`Deleted ${removed.size} task(s).`)
+    }
+    await load()
   }
 
   async function setStatus(id, status) {

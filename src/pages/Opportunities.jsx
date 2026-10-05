@@ -80,25 +80,52 @@ export default function Opportunities({ go }) {
     if (!ids.length) return
     if (!confirm('Delete ' + ids.length + ' selected opportunity(ies)? This cannot be undone.')) return
     setDeleting(true)
-    try {
+
+    // 1) Clear history FIRST (FK + delete triggers write history)
+    await supabase.from('opportunity_history').delete().in('opportunity_id', ids)
+
+    // 2) Quotations
+    {
       const { data: qs } = await supabase.from('quotations').select('id').in('opportunity_id', ids)
       const qids = (qs || []).map(q => q.id)
       if (qids.length) {
         await supabase.from('quotation_items').delete().in('quotation_id', qids)
         await supabase.from('quotations').delete().in('id', qids)
       }
-    } catch (_) {}
-    try { await supabase.from('opportunity_history').delete().in('opportunity_id', ids) } catch (_) {}
-    const { error } = await supabase.from('opportunities').delete().in('id', ids)
-    setDeleting(false)
-    if (error) {
-      showMsg('Delete failed: ' + error.message)
-      return
     }
+
+    // 3) History again
+    await supabase.from('opportunity_history').delete().in('opportunity_id', ids)
+
+    // 4) Opportunities
+    let deletedIds = []
+    {
+      const { data, error } = await supabase.from('opportunities').delete().in('id', ids).select('id')
+      if (error) {
+        if (/opportunity_history|foreign key|fkey/i.test(error.message || '')) {
+          setDeleting(false)
+          showMsg('Delete blocked by opportunity_history. Run sql/004_fix_opportunity_delete.sql in Supabase, then try again.')
+          return
+        }
+        setDeleting(false)
+        showMsg('Delete failed: ' + error.message)
+        return
+      }
+      deletedIds = (data || []).map(r => r.id)
+    }
+
+    setDeleting(false)
+    const removed = new Set(deletedIds)
+    setItems(prev => prev.filter(o => !removed.has(o.id)))
+    setAllForBoard(prev => prev.filter(o => !removed.has(o.id)))
     setSelectedIds(new Set())
-    if (selected && ids.includes(selected.id)) setSelected(null)
-    showMsg('Deleted ' + ids.length + ' opportunity(ies).')
-    load()
+    if (selected && removed.has(selected.id)) setSelected(null)
+    if (removed.size === 0) {
+      showMsg('No opportunities were deleted. Check RLS DELETE on opportunities / opportunity_history.')
+    } else {
+      showMsg('Deleted ' + removed.size + ' opportunity(ies).')
+    }
+    await load()
   }
 
   async function load() {

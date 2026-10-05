@@ -85,13 +85,14 @@ export const TRIGGER_TYPE_LABELS = {
 
 /** Action Centre daily trigger scan defaults */
 export const DEFAULT_TRIGGER_CONFIG = {
-  maxTasksPerRun: 25,
-  includeMissingDetails: true,
-  includeEmployees: true,
-  includeIndustry: true,
-  includeResearch: true,
-  includeSignals: true,
-  includeQuotationFollowup: true,
-  employeeMin: 50,
-  daysSinceResearch: 90,
+  maxNew: 15,
+  employeeThreshold: 50,
+  employeeHighThreshold: 500,
+  enableMissingDetails: true,
+  enableEmployeeCount: true,
+  enableIndustry: true,
+  enableNewsHiringFunding: true,
+  enableSignals: true,
+  enableQuotation: true,
+  enableMeeting: true,
 }

@@ -16,6 +16,10 @@ export default function Dashboard({ go }) {
   const [cfg, setCfg] = useState(() => getTriggerConfig())
   const [showCfg, setShowCfg] = useState(false)
   const [cfgMsg, setCfgMsg] = useState('')
+  const [showReset, setShowReset] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState('')
+  const [resetting, setResetting] = useState(false)
+  const [resetMsg, setResetMsg] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -64,6 +68,46 @@ export default function Dashboard({ go }) {
     saveTriggerConfig(DEFAULT_TRIGGER_CONFIG)
     setCfgMsg('Reset to defaults.')
     setTimeout(() => setCfgMsg(''), 3000)
+  }
+
+  async function runOperationalReset() {
+    if (resetConfirm.trim().toUpperCase() !== 'DELETE ALL EXCEPT COMPANIES') {
+      setResetMsg('Type the exact phrase: DELETE ALL EXCEPT COMPANIES')
+      return
+    }
+    setResetting(true)
+    setResetMsg('')
+    const errors = []
+    const steps = [
+      { name: 'opportunity_history', fn: () => supabase.from('opportunity_history').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'quotation_items', fn: () => supabase.from('quotation_items').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'quotations', fn: () => supabase.from('quotations').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'activity_log', fn: () => supabase.from('activity_log').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'opportunities', fn: () => supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'tasks', fn: () => supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'meetings_calls', fn: () => supabase.from('meetings_calls').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'signals', fn: () => supabase.from('signals').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+      { name: 'research_queue', fn: () => supabase.from('research_queue').delete().neq('id', '00000000-0000-0000-0000-000000000000') },
+    ]
+    for (const step of steps) {
+      try {
+        const { error } = await step.fn()
+        if (error && !/does not exist|relation|schema cache|PGRST/i.test(error.message || '')) {
+          errors.push(step.name + ': ' + error.message)
+        }
+      } catch (e) {
+        // table may not exist
+      }
+    }
+    setResetting(false)
+    if (errors.length) {
+      setResetMsg('Finished with issues: ' + errors.join('; '))
+    } else {
+      setResetMsg('Done. Companies and contacts kept. All tasks, opportunities, meetings, signals, research and quotes cleared.')
+      setResetConfirm('')
+      setShowReset(false)
+      await load()
+    }
   }
 
   function taskRow(t, accent) {
@@ -153,7 +197,7 @@ export default function Dashboard({ go }) {
         <div className="notice" style={{ marginBottom: 16, background: result.errors?.length ? '#fef2f2' : '#ecfdf5', borderColor: result.errors?.length ? '#fecaca' : '#a7f3d0' }}>
           {result.errors?.length
             ? (String(result.errors[0]).includes('task_code') || String(result.errors[0]).includes('sequence')
-              ? 'Task sequence permission is still missing. Run the SQL I gave you, then click Generate again.'
+              ? 'Task sequence permission is still missing. Run DB_VERIFY_AND_FIX.sql in Supabase, then click Generate again.'
               : result.errors.join('; '))
             : `Run complete: created ${result.created || 0} · already open ${result.skipped || 0} · considered ${result.considered || 0}`}
         </div>
@@ -206,6 +250,44 @@ export default function Dashboard({ go }) {
               ))}
             </tbody>
           </table>}
+      </div>
+
+      <div className="card" style={{ marginTop: 24, borderLeft: '4px solid #b91c1c' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <h2 style={{ fontSize: 14, color: '#991b1b' }}>Reset operational data</h2>
+            <p style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+              Deletes all tasks, opportunities, meetings, signals, research queue and quotes.
+              <strong> Companies and contacts are kept.</strong>
+            </p>
+          </div>
+          <button type="button" className="btn" style={{ borderColor: '#fca5a5', color: '#991b1b' }}
+            onClick={() => { setShowReset(s => !s); setResetMsg(''); setResetConfirm('') }}>
+            {showReset ? 'Cancel' : 'Open reset…'}
+          </button>
+        </div>
+        {showReset && (
+          <div style={{ marginTop: 14, padding: 14, background: '#fef2f2', borderRadius: 8 }}>
+            <p style={{ fontSize: 13, marginBottom: 10 }}>
+              Type exactly: <code style={{ background: '#fee2e2', padding: '2px 6px' }}>DELETE ALL EXCEPT COMPANIES</code>
+            </p>
+            <input
+              className="input"
+              style={{ maxWidth: 360, marginBottom: 10 }}
+              value={resetConfirm}
+              onChange={e => setResetConfirm(e.target.value)}
+              placeholder="DELETE ALL EXCEPT COMPANIES"
+              autoComplete="off"
+            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn" style={{ background: '#b91c1c', color: '#fff', border: 'none' }}
+                disabled={resetting} onClick={runOperationalReset}>
+                {resetting ? 'Deleting…' : 'Delete operational data now'}
+              </button>
+              {resetMsg && <span style={{ fontSize: 12, color: resetMsg.startsWith('Done') ? '#065f46' : '#991b1b' }}>{resetMsg}</span>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

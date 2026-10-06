@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { LIFECYCLE, PAGE_SIZE, lifecycleLabel, lifecycleShort } from '../constants'
+import { PAGE_SIZE, LIFECYCLE_STAGES, lifecycleLabel } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
 
 const emptyForm = {
   name: '',
   legal_name: '',
   address: '',
+  pincode: '',
   city: '',
   hq_location: '',
-  country: 'India',
+  country: '',
   employee_count: '',
   board_no: '',
   website: '',
@@ -20,36 +21,37 @@ const emptyForm = {
 }
 
 export default function Companies({ go }) {
-  const [companies, setCompanies] = useState([])
+  const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [q, setQ] = useState('')
   const [lifecycle, setLifecycle] = useState('all')
+  const [page, setPage] = useState(1)
   const [sortKey, setSortKey] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
-  const [page, setPage] = useState(1)
-  const [showNew, setShowNew] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
+  const [flash, setFlash] = useState('')
 
-  useEffect(() => { load() }, [page, sortKey, sortDir, lifecycle])
+  useEffect(() => { load() }, [page, sortKey, sortDir, lifecycle, q])
+
+  function setF(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
   async function load() {
     setLoading(true)
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
-    let q = supabase.from('companies')
-      .select('id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, created_at', { count: 'exact' })
-      .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
+    let query = supabase.from('companies')
+      .select('id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count', { count: 'exact' })
+      .neq('state', 'deleted')
+      .order(sortKey, { ascending: sortDir === 'asc' })
       .range(from, to)
-    if (search.trim()) {
-      const s = search.trim()
-      q = q.or(`name.ilike.%${s}%,legal_name.ilike.%${s}%,industry.ilike.%${s}%,city.ilike.%${s}%,gst_no.ilike.%${s}%,email.ilike.%${s}%`)
-    }
-    if (lifecycle !== 'all') q = q.eq('lifecycle_status', lifecycle)
-    const { data, count, error } = await q
+    if (lifecycle !== 'all') query = query.eq('lifecycle_status', lifecycle)
+    if (q.trim()) query = query.or(`name.ilike.%${q.trim()}%,legal_name.ilike.%${q.trim()}%,city.ilike.%${q.trim()}%`)
+    const { data, count, error } = await query
     if (error) console.error(error)
-    setCompanies(data || [])
+    setItems(data || [])
     setTotal(count || 0)
     setLoading(false)
   }
@@ -60,24 +62,21 @@ export default function Companies({ go }) {
     setPage(1)
   }
 
-  function setF(key, val) {
-    setForm(f => ({ ...f, [key]: val }))
-  }
-
   async function createCompany(e) {
     e.preventDefault()
     if (!form.name.trim()) return
     const gst = (form.gst_no || '').trim().toUpperCase()
     if (gst && !/^[0-9A-Z]{15}$/.test(gst)) {
-      alert('GST No should be 15 characters (letters and numbers). Leave blank if unknown.')
+      setFlash('GST No should be 15 characters. Leave blank if unknown.')
       return
     }
     setSaving(true)
-    const { data, error } = await supabase.from('companies').insert({
+    const payload = {
       name: form.name.trim(),
       legal_name: form.legal_name.trim() || null,
       address: form.address.trim() || null,
       city: form.city.trim() || null,
+      pincode: form.pincode.trim() || null,
       hq_location: form.hq_location.trim() || null,
       country: form.country.trim() || null,
       employee_count: form.employee_count ? Number(form.employee_count) : null,
@@ -87,112 +86,113 @@ export default function Companies({ go }) {
       gst_no: gst || null,
       industry: form.industry.trim() || null,
       notes: form.notes.trim() || null,
-      lifecycle_status: 'prospect_no_contact',
       state: 'active',
+      lifecycle_status: 'prospect_no_contact',
       research_status: 'NOT_RESEARCHED',
-    }).select('id').single()
+      metadata: {},
+    }
+    let { error } = await supabase.from('companies').insert(payload)
+    if (error && /pincode|column/i.test(error.message)) {
+      delete payload.pincode
+      ;({ error } = await supabase.from('companies').insert(payload))
+    }
     setSaving(false)
-    if (!error && data) {
-      setShowNew(false)
-      setForm({ ...emptyForm })
-      go('company', data.id)
-    } else alert(error?.message || 'Failed to create')
+    if (error) { setFlash('Create failed: ' + error.message); return }
+    setShowCreate(false)
+    setForm({ ...emptyForm })
+    setFlash('Company created.')
+    load()
   }
 
   const columns = [
-    { key: 'name', label: 'Short name', bold: true },
-    { key: 'legal_name', label: 'Full name' },
-    { key: 'city', label: 'City' },
-    { key: 'industry', label: 'Industry' },
-    {
-      key: 'lifecycle_status', label: 'Lifecycle',
-      render: r => <Badge tone={r.lifecycle_status === 'active' ? 'green' : r.lifecycle_status === 'lost' ? 'red' : 'gray'}>{lifecycleShort(r.lifecycle_status)}</Badge>
-    },
-    { key: 'gst_no', label: 'GST' },
+    { key: 'name', label: 'Company', bold: true },
+    { key: 'city', label: 'City', render: r => r.city || r.hq_location || '—' },
+    { key: 'industry', label: 'Industry', render: r => r.industry || '—' },
+    { key: 'lifecycle', label: 'Lifecycle', render: r => <Badge>{lifecycleLabel(r.lifecycle_status)}</Badge> },
+    { key: 'gst', label: 'GST', render: r => r.gst_no || '—' },
   ]
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Accounts" title="Companies" subtitle="Account-level context, activity and commercial relationships">
-        <button className="btn primary" onClick={() => setShowNew(true)}>+ New Company</button>
+      <PageHead eyebrow="Account" title="Companies" subtitle="Company-centric workspace — open a company to act.">
+        <button type="button" className="btn primary" onClick={() => { setForm({ ...emptyForm }); setShowCreate(true) }}>+ New company</button>
       </PageHead>
 
-      <div className="toolbar">
-        <input className="input" style={{ maxWidth: 320 }} placeholder="Search name, GST, city, email..."
-          value={search} onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { setPage(1); load() } }} />
-        <button className="btn" onClick={() => { setPage(1); load() }}>Search</button>
+      {flash && (
+        <div className="notice" style={{ marginBottom: 12 }}>{flash}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <input className="input" style={{ maxWidth: 280 }} placeholder="Search name / city…" value={q}
+          onChange={e => { setQ(e.target.value); setPage(1) }} />
       </div>
 
       <FilterTabs value={lifecycle} onChange={v => { setLifecycle(v); setPage(1) }}
-        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE.map(s => ({ value: s, label: lifecycleLabel(s) }))] } />
+        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE_STAGES.map(s => ({ value: s, label: lifecycleLabel(s) }))]} />
 
-      {loading ? <div className="loading">Loading companies...</div> : (
-        <DataTable
-          columns={columns} rows={companies}
-          sortKey={sortKey} sortDir={sortDir} onSort={onSort}
-          onRowClick={r => go('company', r.id)}
+      {loading ? <div className="loading">Loading…</div> : (
+        <DataTable columns={columns} rows={items} sortKey={sortKey} sortDir={sortDir} onSort={onSort}
           page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage}
-          empty="No companies found."
-        />
+          onRowClick={r => go('company', r.id)}
+          empty="No companies match." />
       )}
 
-      {showNew && (
-        <Modal title="New Company" onClose={() => setShowNew(false)} width={560}>
+      {showCreate && (
+        <Modal title="New company" onClose={() => setShowCreate(false)} width={560}>
           <form onSubmit={createCompany}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Short name *">
-                <input className="input" required value={form.name} onChange={e => setF('name', e.target.value)} placeholder="Trading / display name" />
+                <input className="input" required value={form.name} onChange={e => setF('name', e.target.value)} placeholder="Trading name" />
               </Field>
-              <Field label="Full company name">
-                <input className="input" value={form.legal_name} onChange={e => setF('legal_name', e.target.value)} placeholder="Registered legal name" />
+              <Field label="Full / legal name">
+                <input className="input" value={form.legal_name} onChange={e => setF('legal_name', e.target.value)} placeholder="Registered name" />
               </Field>
             </div>
             <Field label="Address">
-              <textarea className="input" rows={2} value={form.address} onChange={e => setF('address', e.target.value)} placeholder="Street, area, pin" />
+              <textarea className="input" rows={2} value={form.address} onChange={e => setF('address', e.target.value)} />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="City">
                 <input className="input" value={form.city} onChange={e => setF('city', e.target.value)} />
               </Field>
-              <Field label="HQ location">
-                <input className="input" value={form.hq_location} onChange={e => setF('hq_location', e.target.value)} placeholder="If different from city" />
+              <Field label="Pincode">
+                <input className="input" value={form.pincode} onChange={e => setF('pincode', e.target.value)} placeholder="e.g. 560001" />
               </Field>
               <Field label="Country">
                 <input className="input" value={form.country} onChange={e => setF('country', e.target.value)} />
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Employee count">
+              <Field label="HQ location">
+                <input className="input" value={form.hq_location} onChange={e => setF('hq_location', e.target.value)} placeholder="If different from city" />
+              </Field>
+              <Field label="Board / CIN">
+                <input className="input" value={form.board_no} onChange={e => setF('board_no', e.target.value)} placeholder="CIN / Board reg. no." />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Employees">
                 <input className="input" type="number" min="0" value={form.employee_count} onChange={e => setF('employee_count', e.target.value)} />
               </Field>
-              <Field label="Board No / CIN">
-                <input className="input" value={form.board_no} onChange={e => setF('board_no', e.target.value)} placeholder="CIN or registration no." />
+              <Field label="GST">
+                <input className="input" value={form.gst_no} onChange={e => setF('gst_no', e.target.value.toUpperCase())} placeholder="15-char GSTIN" />
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Website">
                 <input className="input" value={form.website} onChange={e => setF('website', e.target.value)} placeholder="https://" />
               </Field>
-              <Field label="Company email">
+              <Field label="Email">
                 <input className="input" type="email" value={form.email} onChange={e => setF('email', e.target.value)} />
               </Field>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="GST No">
-                <input className="input" value={form.gst_no} onChange={e => setF('gst_no', e.target.value.toUpperCase())} placeholder="15-character GSTIN" maxLength={15} />
-              </Field>
-              <Field label="Industry">
-                <input className="input" value={form.industry} onChange={e => setF('industry', e.target.value)} />
-              </Field>
-            </div>
+            <Field label="Industry">
+              <input className="input" value={form.industry} onChange={e => setF('industry', e.target.value)} />
+            </Field>
             <Field label="Notes">
               <textarea className="input" rows={2} value={form.notes} onChange={e => setF('notes', e.target.value)} />
             </Field>
-            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-              After create you land on the company page — add contacts next (Decision Maker, Procurement, etc.).
-            </p>
-            <Actions saving={saving} onCancel={() => setShowNew(false)} label="Create company" />
+            <Actions saving={saving} onCancel={() => setShowCreate(false)} label="Create company" />
           </form>
         </Modal>
       )}

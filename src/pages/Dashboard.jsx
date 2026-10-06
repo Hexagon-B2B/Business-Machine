@@ -25,16 +25,16 @@ export default function Dashboard({ go }) {
   async function load() {
     const today = new Date().toISOString().slice(0, 10)
     const [c, ct, tOpen, m, o, rq, tasksOver, tasksUser, tasksTrig, meets] = await Promise.all([
-      supabase.from('companies').select('id', { count: 'exact', head: true }),
-      supabase.from('contacts').select('id', { count: 'exact', head: true }),
-      supabase.from('tasks').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
-      supabase.from('meetings_calls').select('id', { count: 'exact', head: true }),
-      supabase.from('opportunities').select('id', { count: 'exact', head: true }).not('stage', 'in', '(won,lost)'),
+      supabase.from('companies').select('id', { count: 'exact', head: true }).neq('state', 'deleted'),
+      supabase.from('contacts').select('id', { count: 'exact', head: true }).neq('state', 'deleted'),
+      supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('state', 'deleted').in('status', ['open', 'in_progress']),
+      supabase.from('meetings_calls').select('id', { count: 'exact', head: true }).neq('state', 'deleted'),
+      supabase.from('opportunities').select('id', { count: 'exact', head: true }).neq('state', 'deleted').not('stage', 'in', '(won,lost)'),
       supabase.from('research_queue').select('id', { count: 'exact', head: true }).neq('status', 'completed'),
-      supabase.from('tasks').select('id, title, due_at, priority, status, source, company_id, companies(name)').in('status', ['open', 'in_progress']).lt('due_at', today).order('due_at').limit(10),
-      supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').in('status', ['open', 'in_progress']).or('source.is.null,source.eq.user').order('due_at').limit(10),
-      supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').in('status', ['open', 'in_progress']).in('source', ['trigger', 'research']).order('due_at').limit(15),
-      supabase.from('meetings_calls').select('id, subject, type, outcome, next_action, scheduled_at, company_id').order('scheduled_at', { ascending: false }).limit(6)
+      supabase.from('tasks').select('id, title, due_at, priority, status, source, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).lt('due_at', today).order('due_at').limit(10),
+      supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).or('source.is.null,source.eq.user').order('due_at').limit(10),
+      supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).in('source', ['trigger', 'research']).order('due_at').limit(15),
+      supabase.from('meetings_calls').select('id, subject, type, outcome, next_action, scheduled_at, company_id').neq('state', 'deleted').order('scheduled_at', { ascending: false }).limit(6)
     ])
     setStats({
       companies: c.count || 0, contacts: ct.count || 0, openTasks: tOpen.count || 0,
@@ -51,6 +51,7 @@ export default function Dashboard({ go }) {
     const { data: activeCos, count: activeCnt } = await supabase
       .from('companies')
       .select('id, name, lifecycle_status, last_billed_at, city, industry', { count: 'exact' })
+      .neq('state', 'deleted')
       .eq('lifecycle_status', 'active')
       .or('last_billed_at.is.null,last_billed_at.lt.' + cutoff)
       .order('last_billed_at', { ascending: true, nullsFirst: true })

@@ -25,6 +25,9 @@ export default function Tasks({ go }) {
   const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(1)
   const [edit, setEdit] = useState(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ company_id: '', title: '', description: '', priority: 'medium', due_at: '' })
+  const [companies, setCompanies] = useState([])
   const [complete, setComplete] = useState(null)
   const [completeForm, setCompleteForm] = useState({ outcome: '', next_due: '', next_title: '' })
   const [saving, setSaving] = useState(false)
@@ -34,6 +37,10 @@ export default function Tasks({ go }) {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { load() }, [filter, sourceFilter, page, sortKey, sortDir])
+  useEffect(() => {
+    supabase.from('companies').select('id, name').eq('state', 'active').order('name').limit(2000)
+      .then(({ data }) => setCompanies(data || []))
+  }, [])
 
   function showFlash(msg) {
     setFlash(msg)
@@ -60,9 +67,8 @@ export default function Tasks({ go }) {
       showFlash('Load failed: ' + error.message)
     }
     let rows = data || []
-    const isTrig = t => t.source === 'trigger' || t.source === 'research' || t.metadata?.origin === 'trigger' || t.metadata?.trigger_type
-    if (sourceFilter === 'trigger') rows = rows.filter(isTrig)
-    else if (sourceFilter === 'user') rows = rows.filter(t => !isTrig(t))
+    if (sourceFilter === 'trigger') rows = rows.filter(t => t.source === 'trigger' || t.metadata?.trigger_type)
+    else if (sourceFilter === 'user') rows = rows.filter(t => t.source === 'user' || !t.source)
     setTasks(rows)
     setTotal(count || 0)
     setLoading(false)
@@ -110,7 +116,6 @@ export default function Tasks({ go }) {
     }
     const removed = new Set((data || []).map(r => r.id))
     setTasks(prev => prev.filter(t => !removed.has(t.id)))
-    setTotal(t => Math.max(0, (t || 0) - removed.size))
     setSelected(new Set())
     if (removed.size === 0) showFlash('No tasks were moved to Deleted. Check RLS UPDATE on tasks.')
     else showFlash(`Moved ${removed.size} task(s) to Deleted.`)
@@ -124,81 +129,66 @@ export default function Tasks({ go }) {
     setBusyId(null)
     if (error) {
       showFlash('Update failed: ' + error.message)
-      return false
+      return
     }
     showFlash(dbStatus === 'in_progress' ? 'Moved to In progress.' : 'Task updated.')
     load()
-    return true
   }
 
   function openComplete(t) {
     setComplete(t)
-    setCompleteForm({
-      outcome: t.metadata?.outcome || '',
-      next_due: '',
-      next_title: t.title ? `Follow-up: ${t.title}` : '',
-    })
+    setCompleteForm({ outcome: '', next_due: '', next_title: '' })
   }
 
   async function submitComplete(e) {
     e.preventDefault()
     if (!complete) return
     const outcome = (completeForm.outcome || '').trim()
-    const needOutcome = !(complete.description || '').trim() || isInstructionOnly(complete) || !hasOutcome(complete)
-    if (needOutcome && !outcome) {
+    if (!outcome) {
       showFlash('Please record what was done on this task before closing it.')
       return
     }
     setSaving(true)
-    const stamp = new Date().toISOString().slice(0, 10)
+    const stamp = new Date().toLocaleString()
     let description = complete.description || ''
-    if (outcome) {
-      if (/---\s*Work done/i.test(description)) {
-        description = description.replace(/---\s*Work done[\s\S]*$/i, '').trim()
-      }
-      description = (description ? description + '\n\n' : '') + `--- Work done (${stamp}) ---\n${outcome}`
+    if (/---\s*Work done/i.test(description)) {
+      description = description.replace(/---\s*Work done[\s\S]*$/i, '').trim()
     }
-    const meta = { ...(complete.metadata || {}), outcome: outcome || complete.metadata?.outcome || null, completed_on: stamp }
+    description = (description ? description + '\n\n' : '') + `--- Work done (${stamp}) ---\n${outcome}`
+    const meta = { ...(complete.metadata || {}), outcome, completed_at: new Date().toISOString() }
     const payload = { status: 'completed', description: description || null, metadata: meta }
     let { error } = await supabase.from('tasks').update(payload).eq('id', complete.id)
     if (error && /metadata|column/i.test(error.message)) {
       ;({ error } = await supabase.from('tasks').update({ status: 'completed', description: description || null }).eq('id', complete.id))
     }
-    if (error) {
-      setSaving(false)
-      showFlash('Complete failed: ' + error.message)
-      return
-    }
-    if (completeForm.next_due) {
-      const followTitle = (completeForm.next_title || `Follow-up: ${complete.title}`).trim()
+    if (!error && completeForm.next_due) {
       await supabase.from('tasks').insert({
         company_id: complete.company_id,
-        title: followTitle,
-        description: `Follow-up from completed task: ${complete.title}`,
+        title: (completeForm.next_title || ('Follow-up: ' + complete.title)).slice(0, 200),
+        description: 'Follow-up after: ' + complete.title,
         priority: complete.priority || 'medium',
         status: 'open',
         due_at: completeForm.next_due,
         state: 'active',
         source: 'user',
-        metadata: { origin: 'follow_up', parent_task_id: complete.id },
+        metadata: { origin: 'task_complete', parent_task_id: complete.id },
       })
-      showFlash('Task completed and next work scheduled.')
-    } else {
-      showFlash('Task marked done. Work log saved.')
     }
     setSaving(false)
+    if (error) {
+      showFlash('Could not complete: ' + error.message)
+      return
+    }
+    showFlash('Task marked done. Work log saved.')
     setComplete(null)
     if (edit?.id === complete.id) setEdit(null)
     load()
   }
 
-  async function cancelTask(e, id) {
-    if (e) { e.preventDefault(); e.stopPropagation() }
+  async function cancelTask(id) {
     if (!confirm('Cancel this task?')) return
-    setBusyId(id)
     const { error } = await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id)
-    setBusyId(null)
-    if (error) showFlash('Update failed: ' + error.message)
+    if (error) showFlash('Cancel failed: ' + error.message)
     else {
       showFlash('Task cancelled.')
       if (edit?.id === id) setEdit(null)
@@ -208,14 +198,14 @@ export default function Tasks({ go }) {
 
   async function saveEdit(e) {
     e.preventDefault()
-    if (!edit?.title?.trim()) return
+    if (!edit) return
     setSaving(true)
     let status = edit.status || 'open'
     if (status === 'done') status = 'completed'
     const payload = {
-      title: edit.title.trim(),
+      title: edit.title?.trim() || edit.title,
       description: edit.description || null,
-      priority: edit.priority || 'medium',
+      priority: (edit.priority || 'medium').toLowerCase(),
       status,
       due_at: edit.due_at || null,
     }
@@ -226,51 +216,66 @@ export default function Tasks({ go }) {
       return
     }
     setEdit(null)
-    showFlash('Task saved.')
+    showFlash('Task updated.')
     load()
   }
 
-  function typeBadge(t) {
-    const tt = t.metadata?.trigger_type || (t.source === 'trigger' || t.source === 'research' ? t.source : null)
-    return tt ? <Badge tone="blue">{TRIGGER_TYPE_LABELS[tt] || tt}</Badge> : <Badge>Scheduled</Badge>
+  async function createTask(e) {
+    e.preventDefault()
+    if (!createForm.company_id) { showFlash('Select a company.'); return }
+    if (!createForm.title.trim()) { showFlash('Title is required.'); return }
+    setSaving(true)
+    const payload = {
+      company_id: createForm.company_id,
+      title: createForm.title.trim(),
+      description: createForm.description || null,
+      priority: (createForm.priority || 'medium').toLowerCase(),
+      status: 'open',
+      due_at: createForm.due_at || null,
+      state: 'active',
+      source: 'user',
+      metadata: {},
+    }
+    const { error } = await supabase.from('tasks').insert(payload)
+    setSaving(false)
+    if (error) { showFlash('Create failed: ' + error.message); return }
+    setShowCreate(false)
+    setCreateForm({ company_id: '', title: '', description: '', priority: 'medium', due_at: '' })
+    showFlash('Task created.')
+    load()
   }
 
   const columns = [
-    { key: 'title', label: 'Title', bold: true },
+    { key: 'title', label: 'Task', bold: true, render: t => (
+      <div>
+        <div>{t.title}</div>
+        {isInstructionOnly(t) && <div style={{ fontSize: 11, color: '#64748b' }}>Instruction · {TRIGGER_TYPE_LABELS[t.metadata?.trigger_type] || t.source}</div>}
+      </div>
+    ) },
     { key: 'company', label: 'Company', render: t => t.companies?.name ? (
       <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0 }}
         onClick={e => { e.stopPropagation(); go('company', t.company_id) }}>{t.companies.name}</button>
     ) : '—' },
-    { key: 'type', label: 'Type', render: typeBadge },
     { key: 'priority', label: 'Priority', render: t => <Badge tone={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'yellow' : 'gray'}>{t.priority}</Badge> },
-    { key: 'status', label: 'Status', render: t => <Badge tone={t.status === 'completed' || t.status === 'done' ? 'green' : t.status === 'cancelled' ? 'gray' : t.status === 'in_progress' ? 'yellow' : 'blue'}>{t.status === 'completed' ? 'done' : t.status}</Badge> },
+    { key: 'status', label: 'Status', render: t => <Badge tone={t.status === 'completed' || t.status === 'done' ? 'green' : t.status === 'in_progress' ? 'yellow' : 'blue'}>{t.status === 'completed' ? 'done' : t.status}</Badge> },
     { key: 'due_at', label: 'Due', render: t => t.due_at ? new Date(t.due_at).toLocaleDateString() : '—' },
-    { key: 'action', label: '', render: t => (
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
-        {t.status === 'open' && (
-          <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
-            disabled={busyId === t.id}
-            onClick={() => setStatus(t.id, 'in_progress')}>Start</button>
-        )}
-        {isTaskOpen(t.status) && (
-          <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
-            disabled={busyId === t.id}
-            onClick={() => openComplete(t)}>Done</button>
-        )}
-        <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 8px' }}
-          onClick={() => setEdit({ ...t, due_at: (t.due_at || '').slice(0, 10) })}>Edit</button>
+    { key: 'actions', label: '', render: t => isTaskOpen(t.status) ? (
+      <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+        {t.status !== 'in_progress' && <button type="button" className="btn" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busyId === t.id} onClick={() => setStatus(t.id, 'in_progress')}>Start</button>}
+        <button type="button" className="btn" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => openComplete(t)}>Done</button>
       </div>
-    )},
+    ) : null },
   ]
 
   return (
     <div style={{ padding: 28 }}>
       <PageHead eyebrow="Work" title="Tasks" subtitle="Open → Start (in progress) → Done with work log. Optional next schedule keeps the pipeline moving.">
-        <button type="button" className="btn primary" onClick={() => go('companies')}>Go to Companies →</button>
+        <button type="button" className="btn" onClick={() => go('companies')}>Companies</button>
+        <button type="button" className="btn primary" onClick={() => { setCreateForm({ company_id: '', title: '', description: '', priority: 'medium', due_at: '' }); setShowCreate(true) }}>+ New task</button>
       </PageHead>
 
       {flash && (
-        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') || flash.includes('Please') ? '#fef2f2' : '#ecfdf5', borderColor: flash.includes('failed') || flash.includes('Please') ? '#fecaca' : '#a7f3d0', color: flash.includes('failed') || flash.includes('Please') ? '#991b1b' : '#065f46' }}>
+        <div className="notice" style={{ marginBottom: 12, background: flash.includes('failed') || flash.includes('Please') || flash.includes('Select') || flash.includes('required') ? '#fef2f2' : '#ecfdf5', borderColor: flash.includes('failed') || flash.includes('Please') || flash.includes('Select') || flash.includes('required') ? '#fecaca' : '#a7f3d0', color: flash.includes('failed') || flash.includes('Please') || flash.includes('Select') || flash.includes('required') ? '#991b1b' : '#065f46' }}>
           {flash}
         </div>
       )}
@@ -279,34 +284,21 @@ export default function Tasks({ go }) {
         options={[
           { value: 'open', label: 'Open' },
           { value: 'in_progress', label: 'In progress' },
-          { value: 'active', label: 'All active' },
+          { value: 'active', label: 'Active' },
           { value: 'done', label: 'Done' },
           { value: 'cancelled', label: 'Cancelled' },
           { value: 'all', label: 'All' },
         ]} />
 
-      <div className="toolbar">
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Source:</span>
-        {[
-          { value: 'all', label: 'All sources' },
-          { value: 'user', label: 'Scheduled (you)' },
-          { value: 'trigger', label: 'Trigger / Enrichment' },
-        ].map(o => (
-          <button type="button" key={o.value} className="btn" onClick={() => { setSourceFilter(o.value); setPage(1); setSelected(new Set()) }}
-            style={{ background: sourceFilter === o.value ? '#1e40af' : '#fff', color: sourceFilter === o.value ? '#fff' : '#0f172a', fontSize: 12 }}>
-            {o.label}
+      {selected.size > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>{selected.size} selected</span>
+          <button type="button" className="btn danger" disabled={deleting} onClick={deleteSelected}>
+            {deleting ? 'Deleting…' : (`Move to Deleted (${selected.size})`)}
           </button>
-        ))}
-        {selected.size > 0 && (
-          <>
-            <span style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>{selected.size} selected</span>
-            <button type="button" className="btn danger" disabled={deleting} onClick={deleteSelected} style={{ fontSize: 12 }}>
-              {deleting ? 'Deleting…' : `Move to Deleted (${selected.size})`}
-            </button>
-            <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setSelected(new Set())}>Clear selection</button>
-          </>
-        )}
-      </div>
+          <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setSelected(new Set())}>Clear selection</button>
+        </div>
+      )}
 
       {loading ? <div className="loading">Loading...</div> : (
         <DataTable columns={columns} rows={tasks} sortKey={sortKey} sortDir={sortDir} onSort={onSort}
@@ -333,12 +325,12 @@ export default function Tasks({ go }) {
                 onChange={e => setCompleteForm({ ...completeForm, outcome: e.target.value })}
                 placeholder="What did you do?" />
             </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12 }}>
-              <Field label="Next due date">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Next due (optional)">
                 <input className="input" type="date" value={completeForm.next_due}
                   onChange={e => setCompleteForm({ ...completeForm, next_due: e.target.value })} />
               </Field>
-              <Field label="Follow-up title">
+              <Field label="Next task title">
                 <input className="input" value={completeForm.next_title}
                   onChange={e => setCompleteForm({ ...completeForm, next_title: e.target.value })}
                   disabled={!completeForm.next_due} />
@@ -348,6 +340,36 @@ export default function Tasks({ go }) {
               <button type="submit" className="btn primary" disabled={saving}>{saving ? 'Saving…' : 'Mark done'}</button>
               <button type="button" className="btn" onClick={() => setComplete(null)}>Cancel</button>
             </div>
+          </form>
+        </Modal>
+      )}
+
+      {showCreate && (
+        <Modal title="New task" onClose={() => setShowCreate(false)} width={520}>
+          <form onSubmit={createTask}>
+            <Field label="Company *">
+              <select className="input" required value={createForm.company_id} onChange={e => setCreateForm({ ...createForm, company_id: e.target.value })}>
+                <option value="">Select company…</option>
+                {companies.map(co => <option key={co.id} value={co.id}>{co.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Title *">
+              <input className="input" required value={createForm.title} onChange={e => setCreateForm({ ...createForm, title: e.target.value })} />
+            </Field>
+            <Field label="Description">
+              <textarea className="input" rows={2} value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Priority">
+                <select className="input" value={createForm.priority} onChange={e => setCreateForm({ ...createForm, priority: e.target.value })}>
+                  {TASK_PRIORITY.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+              <Field label="Due">
+                <input className="input" type="date" value={createForm.due_at} onChange={e => setCreateForm({ ...createForm, due_at: e.target.value })} />
+              </Field>
+            </div>
+            <Actions saving={saving} onCancel={() => setShowCreate(false)} label="Create task" />
           </form>
         </Modal>
       )}
@@ -376,6 +398,7 @@ export default function Tasks({ go }) {
                 <input className="input" type="date" value={edit.due_at || ''} onChange={e => setEdit({ ...edit, due_at: e.target.value })} />
               </Field>
             </div>
+            <p style={{ fontSize: 12, color: '#64748b' }}>Edit corrects mistakes. In progress = working on it. Done = completed.</p>
             <Actions saving={saving} onCancel={() => setEdit(null)} label="Save changes" />
           </form>
         </Modal>

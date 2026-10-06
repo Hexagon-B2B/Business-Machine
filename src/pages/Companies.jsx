@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { PAGE_SIZE, LIFECYCLE_STAGES, lifecycleLabel } from '../constants'
+import { PAGE_SIZE, LIFECYCLE, lifecycleLabel } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
 
 const emptyForm = {
@@ -128,7 +128,7 @@ export default function Companies({ go }) {
       </div>
 
       <FilterTabs value={lifecycle} onChange={v => { setLifecycle(v); setPage(1) }}
-        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE_STAGES.map(s => ({ value: s, label: lifecycleLabel(s) }))]} />
+        options={[{ value: 'all', label: 'All' }, ...LIFECYCLE.map(s => ({ value: s, label: lifecycleLabel(s) }))]} />
 
       {loading ? <div className="loading">Loading…</div> : (
         <DataTable columns={columns} rows={items} sortKey={sortKey} sortDir={sortDir} onSort={onSort}

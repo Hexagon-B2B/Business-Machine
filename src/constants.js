@@ -10,6 +10,7 @@ export const LIFECYCLE = [
   'rfq_only',
   'active',
   'lost',
+  'not_qualified',
 ]
 export const LIFECYCLE_META = {
   prospect_no_contact: { label: 'Prospect - No Contact', short: 'No Contact' },
@@ -20,12 +21,29 @@ export const LIFECYCLE_META = {
   rfq_only:            { label: 'RFQ Only',              short: 'RFQ Only' },
   active:              { label: 'Active',                short: 'Active' },
   lost:                { label: 'Lost',                  short: 'Lost' },
+  not_qualified:       { label: 'Not Qualified',         short: 'Not Qual.' },
 }
 export function lifecycleLabel(s) {
   return LIFECYCLE_META[s]?.label || s || '—'
 }
 export function lifecycleShort(s) {
   return LIFECYCLE_META[s]?.short || s || '—'
+}
+
+/** Why we will not sell / pursue this company (research disqualify) */
+export const NOT_QUALIFIED_REASONS = [
+  { value: 'too_small',        label: 'Too small — below minimum size / volume' },
+  { value: 'no_need',          label: 'No need — product/category not relevant' },
+  { value: 'financial_risk',   label: 'Financial risk — weak credit / cash stress' },
+  { value: 'bad_payer',        label: 'Bad payer — known delayed or non-payment' },
+  { value: 'high_service',     label: 'High service demand — cost exceeds margin' },
+  { value: 'out_of_territory', label: 'Out of territory — outside service geography' },
+  { value: 'competitor_locked',label: 'Locked with competitor / exclusive deal' },
+  { value: 'compliance',       label: 'Compliance / regulatory mismatch' },
+  { value: 'other',            label: 'Other (note in company notes)' },
+]
+export function notQualifiedReasonLabel(v) {
+  return NOT_QUALIFIED_REASONS.find(r => r.value === v)?.label || v || '—'
 }
 
 /** Contact phone kinds */

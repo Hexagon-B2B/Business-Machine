@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { PAGE_SIZE, LIFECYCLE, lifecycleLabel } from '../constants'
+import { PAGE_SIZE, LIFECYCLE, lifecycleLabel, notQualifiedReasonLabel } from '../constants'
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge } from '../ui'
 
 const emptyForm = {
@@ -18,6 +18,21 @@ const emptyForm = {
   gst_no: '',
   industry: '',
   notes: '',
+}
+
+function formatInr(n) {
+  if (n == null || n === '' || Number.isNaN(Number(n))) return '—'
+  const v = Number(n)
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(v % 10000000 === 0 ? 0 : 1)}Cr`
+  if (v >= 100000) return `₹${(v / 100000).toFixed(v % 100000 === 0 ? 0 : 1)}L`
+  return `₹${Math.round(v).toLocaleString('en-IN')}`
+}
+
+function researchTone(s) {
+  if (s === 'RESEARCHED') return 'green'
+  if (s === 'IN_PROGRESS') return 'yellow'
+  if (s === 'NEEDS_UPDATE') return 'blue'
+  return 'gray'
 }
 
 export default function Companies({ go }) {
@@ -38,27 +53,93 @@ export default function Companies({ go }) {
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
+  async function loadActivity(companyIds) {
+    if (!companyIds.length) return {}
+    const map = Object.fromEntries(companyIds.map(id => [id, { tasks: 0, calls: 0, opps: 0, pipeline: 0 }]))
+
+    const [tasksRes, callsRes, oppsRes] = await Promise.all([
+      supabase.from('tasks')
+        .select('company_id, status')
+        .in('company_id', companyIds)
+        .neq('state', 'deleted')
+        .in('status', ['open', 'in_progress']),
+      supabase.from('meetings_calls')
+        .select('company_id')
+        .in('company_id', companyIds)
+        .neq('state', 'deleted'),
+      supabase.from('opportunities')
+        .select('company_id, stage, deal_size')
+        .in('company_id', companyIds)
+        .neq('state', 'deleted'),
+    ])
+
+    for (const t of tasksRes.data || []) {
+      if (map[t.company_id]) map[t.company_id].tasks += 1
+    }
+    for (const c of callsRes.data || []) {
+      if (map[c.company_id]) map[c.company_id].calls += 1
+    }
+    for (const o of oppsRes.data || []) {
+      if (!map[o.company_id]) continue
+      if (o.stage !== 'won' && o.stage !== 'lost') {
+        map[o.company_id].opps += 1
+        if (o.deal_size != null && !Number.isNaN(Number(o.deal_size))) {
+          map[o.company_id].pipeline += Number(o.deal_size)
+        }
+      }
+    }
+    return map
+  }
+
   async function load() {
     setLoading(true)
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
-    let query = supabase.from('companies')
-      .select('id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count', { count: 'exact' })
-      .neq('state', 'deleted')
-      .order(sortKey, { ascending: sortDir === 'asc' })
-      .range(from, to)
-    if (lifecycle !== 'all') query = query.eq('lifecycle_status', lifecycle)
-    if (q.trim()) query = query.or(`name.ilike.%${q.trim()}%,legal_name.ilike.%${q.trim()}%,city.ilike.%${q.trim()}%`)
-    const { data, count, error } = await query
+    const sortable = ['name', 'city', 'industry', 'lifecycle_status', 'research_status', 'employee_count']
+    const orderCol = sortable.includes(sortKey) ? sortKey : 'name'
+
+    const selectCols = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, not_qualified_reason, metadata'
+    const selectColsSafe = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, metadata'
+
+    function buildQuery(cols) {
+      let query = supabase.from('companies')
+        .select(cols, { count: 'exact' })
+        .neq('state', 'deleted')
+        .order(orderCol, { ascending: sortDir === 'asc' })
+        .range(from, to)
+      if (lifecycle !== 'all') query = query.eq('lifecycle_status', lifecycle)
+      if (q.trim()) {
+        const s = q.trim().replace(/%/g, '')
+        query = query.or(`name.ilike.%${s}%,legal_name.ilike.%${s}%,city.ilike.%${s}%,industry.ilike.%${s}%`)
+      }
+      return query
+    }
+
+    let { data, count, error } = await buildQuery(selectCols)
+    if (error && /not_qualified_reason|column/i.test(error.message)) {
+      ;({ data, count, error } = await buildQuery(selectColsSafe))
+    }
     if (error) console.error(error)
-    setItems(data || [])
+
+    const rows = data || []
+    const activity = await loadActivity(rows.map(r => r.id))
+    setItems(rows.map(r => ({ ...r, _act: activity[r.id] || { tasks: 0, calls: 0, opps: 0, pipeline: 0 } })))
     setTotal(count || 0)
     setLoading(false)
   }
 
   function onSort(key) {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('asc') }
+    const colMap = {
+      name: 'name',
+      city: 'city',
+      industry: 'industry',
+      lifecycle: 'lifecycle_status',
+      research: 'research_status',
+      employees: 'employee_count',
+    }
+    const col = colMap[key] || key
+    if (sortKey === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(col); setSortDir('asc') }
     setPage(1)
   }
 
@@ -105,16 +186,89 @@ export default function Companies({ go }) {
   }
 
   const columns = [
-    { key: 'name', label: 'Company', bold: true },
-    { key: 'city', label: 'City', render: r => r.city || r.hq_location || '—' },
-    { key: 'industry', label: 'Industry', render: r => r.industry || '—' },
-    { key: 'lifecycle', label: 'Lifecycle', render: r => <Badge>{lifecycleLabel(r.lifecycle_status)}</Badge> },
-    { key: 'gst', label: 'GST', render: r => r.gst_no || '—' },
+    {
+      key: 'name',
+      label: 'Company',
+      bold: true,
+      render: r => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{r.name}</div>
+          {r.employee_count ? (
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{Number(r.employee_count).toLocaleString()} emp</div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'city',
+      label: 'City',
+      render: r => r.city || r.hq_location || '—',
+    },
+    {
+      key: 'industry',
+      label: 'Industry',
+      render: r => (
+        <span style={{ display: 'inline-block', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.industry || ''}>
+          {r.industry || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'lifecycle',
+      label: 'Lifecycle',
+      render: r => (
+        <div>
+          <Badge>{lifecycleLabel(r.lifecycle_status)}</Badge>
+          {r.lifecycle_status === 'not_qualified' && (
+            <div style={{ fontSize: 10, color: '#64748b', marginTop: 3, maxWidth: 140, lineHeight: 1.3 }}>
+              {notQualifiedReasonLabel(r.not_qualified_reason || r.metadata?.not_qualified_reason)}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'research',
+      label: 'Research',
+      render: r => <Badge tone={researchTone(r.research_status)}>{(r.research_status || 'NOT_RESEARCHED').replace(/_/g, ' ')}</Badge>,
+    },
+    {
+      key: 'tasks',
+      label: 'Tasks',
+      render: r => {
+        const n = r._act?.tasks || 0
+        return <span style={{ fontWeight: n ? 600 : 400, color: n ? '#0f172a' : '#94a3b8' }}>{n || '—'}</span>
+      },
+    },
+    {
+      key: 'calls',
+      label: 'Calls',
+      render: r => {
+        const n = r._act?.calls || 0
+        return <span style={{ fontWeight: n ? 600 : 400, color: n ? '#0f172a' : '#94a3b8' }}>{n || '—'}</span>
+      },
+    },
+    {
+      key: 'opps',
+      label: 'Opps',
+      render: r => {
+        const n = r._act?.opps || 0
+        return <span style={{ fontWeight: n ? 600 : 400, color: n ? '#0f172a' : '#94a3b8' }}>{n || '—'}</span>
+      },
+    },
+    {
+      key: 'pipeline',
+      label: 'Pipeline',
+      render: r => {
+        const n = r._act?.pipeline || 0
+        return <span style={{ fontWeight: n ? 600 : 400, color: n ? '#065f46' : '#94a3b8', whiteSpace: 'nowrap' }}>{n ? formatInr(n) : '—'}</span>
+      },
+    },
   ]
 
   return (
-    <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Account" title="Companies" subtitle="Company-centric workspace — open a company to act.">
+    <div style={{ padding: '20px 24px' }}>
+      <PageHead eyebrow="Account" title="Companies" subtitle="Company-centric workspace — open a company to act. Counts = open tasks, logged calls/meetings, open opportunities & pipeline value.">
         <button type="button" className="btn primary" onClick={() => { setForm({ ...emptyForm }); setShowCreate(true) }}>+ New company</button>
       </PageHead>
 
@@ -122,9 +276,10 @@ export default function Companies({ go }) {
         <div className="notice" style={{ marginBottom: 12 }}>{flash}</div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <input className="input" style={{ maxWidth: 280 }} placeholder="Search name / city…" value={q}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input className="input" style={{ maxWidth: 300 }} placeholder="Search name / city / industry…" value={q}
           onChange={e => { setQ(e.target.value); setPage(1) }} />
+        <span style={{ fontSize: 12, color: '#64748b' }}>{total.toLocaleString()} companies</span>
       </div>
 
       <FilterTabs value={lifecycle} onChange={v => { setLifecycle(v); setPage(1) }}

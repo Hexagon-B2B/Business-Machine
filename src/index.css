@@ -1,52 +1,65 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #f1f5f9;
   color: #0f172a;
   line-height: 1.5;
-  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 a { color: #2563eb; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
 .btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 14px; border-radius: 8px; border: 1px solid #cbd5e1;
-  background: #fff; cursor: pointer; font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px;
+  padding: 10px 16px; border-radius: 10px; border: 1px solid #cbd5e1;
+  background: #fff; cursor: pointer; font-size: 14px; font-weight: 600;
 }
 .btn:hover { background: #f8fafc; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
 .btn.primary:hover { background: #1d4ed8; }
 .btn.danger { color: #dc2626; border-color: #fecaca; }
-.btn.ghost { background: transparent; }
+.btn.ghost { background: transparent; border-color: transparent; }
+
 .card {
   background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
   padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .input {
-  width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
-  border-radius: 8px; font-size: 14px; background: #fff;
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd5e1;
+  border-radius: 10px; font-size: 16px; background: #fff;
 }
+textarea.input { min-height: 88px; padding-top: 10px; }
 .input:focus {
   outline: none; border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
 }
-.label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 4px; }
-.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+select.input { appearance: auto; }
+.label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #64748b; text-transform: uppercase; }
-.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.toolbar {
+  display: flex; gap: 8px; flex-wrap: nowrap; margin-bottom: 14px; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.toolbar .btn { flex-shrink: 0; white-space: nowrap; }
 .table-wrap { overflow: auto; max-height: calc(100vh - 280px); -webkit-overflow-scrolling: touch; }
-.table { width: 100%; border-collapse: collapse; min-width: 480px; }
+.table { width: 100%; border-collapse: collapse; min-width: 640px; }
 .table th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  color: #64748b; padding: 10px 12px; border-bottom: 1px solid #e2e8f0;
+  color: #64748b; padding: 12px 10px; border-bottom: 1px solid #e2e8f0;
   background: #f8fafc; position: sticky; top: 0; z-index: 1; cursor: pointer; user-select: none; white-space: nowrap;
 }
 .table th:hover { color: #0f172a; }
-.table td { padding: 11px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.table td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: top; }
 .table tr:hover td { background: #f8fafc; }
 .pager { display: flex; justify-content: space-between; align-items: center; padding: 12px; font-size: 13px; color: #475569; gap: 10px; flex-wrap: wrap; }
-.pager .pages { display: flex; gap: 4px; flex-wrap: wrap; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.pager .pages { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.3; }
 .badge.blue { background: #dbeafe; color: #1e40af; }
 .badge.green { background: #dcfce7; color: #166534; }
 .badge.yellow { background: #fef9c3; color: #854d0e; }
@@ -58,9 +71,9 @@ button, input, select, textarea { font: inherit; }
 .stagebar { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
 .stage { min-width: 190px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; flex-shrink: 0; }
 .stage h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 8px; }
-.opp-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-top: 8px; cursor: pointer; }
+.opp-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 8px; cursor: pointer; min-height: 48px; }
 .opp-card:hover { border-color: #93c5fd; }
-.link-list a { display: block; padding: 6px 0; font-size: 13px; }
+.link-list a { display: block; padding: 10px 0; font-size: 14px; min-height: 44px; }
 
 .app-shell {
   display: flex;
@@ -106,14 +119,15 @@ button, input, select, textarea { font: inherit; }
   display: block;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  margin-bottom: 2px;
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  min-height: 48px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: #94a3b8;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 .nav-link.active {
@@ -152,20 +166,21 @@ button, input, select, textarea { font: inherit; }
     color: #fff;
     padding: 10px 14px;
     border-bottom: 1px solid #1e293b;
+    min-height: 56px;
   }
   .menu-toggle {
     border: 0;
     background: #1e293b;
     color: #fff;
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    font-size: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    font-size: 22px;
     cursor: pointer;
     flex-shrink: 0;
   }
   .mobile-bar-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     min-width: 0;
   }
@@ -187,7 +202,7 @@ button, input, select, textarea { font: inherit; }
     left: 0;
     top: 0;
     bottom: 0;
-    width: min(280px, 86vw);
+    width: min(300px, 88vw);
     height: 100%;
     transform: translateX(-105%);
     transition: transform 0.2s ease;
@@ -200,21 +215,29 @@ button, input, select, textarea { font: inherit; }
     position: absolute;
     right: 10px;
     top: 10px;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: 8px;
+    border-radius: 10px;
     background: #1e293b;
     color: #e2e8f0;
-    font-size: 22px;
+    font-size: 24px;
     cursor: pointer;
   }
   .app-main { width: 100%; }
-  .app-main > div { padding: 16px !important; }
+  .app-main > div { padding: 14px !important; }
   .page-head h1 { font-size: 18px !important; }
-  .table-wrap { max-height: none; }
+  .table { min-width: 720px; }
+  .table-wrap { max-height: none; margin: 0 -4px; }
   .stage { min-width: 160px; }
-  .card { padding: 12px; }
+  .card { padding: 14px; }
+  .pager .btn { min-height: 44px; min-width: 44px; }
+}
+
+@media (max-width: 480px) {
+  .btn { padding: 10px 12px; font-size: 13px; }
+  .table th, .table td { padding: 10px 8px; font-size: 12px; }
+  .page-head { margin-bottom: 12px; }
 }

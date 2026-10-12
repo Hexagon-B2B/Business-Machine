@@ -42,7 +42,8 @@ export default function MeetingsCalls({ go }) {
 
   function showFlash(m) {
     setFlash(m)
-    setTimeout(() => setFlash(''), 4000)
+    const isErr = /fail|required|select|error|constraint|violat/i.test(String(m))
+    setTimeout(() => setFlash(''), isErr ? 12000 : 4000)
   }
 
   async function load() {
@@ -129,9 +130,17 @@ export default function MeetingsCalls({ go }) {
       state: 'active',
       metadata: {},
     }
-    const { error } = await supabase.from('meetings_calls').insert(payload)
+    let { error } = await supabase.from('meetings_calls').insert(payload)
+    // Retry without metadata if column missing
+    if (error && /metadata|column/i.test(error.message)) {
+      const { metadata, ...rest } = payload
+      ;({ error } = await supabase.from('meetings_calls').insert(rest))
+    }
     setSaving(false)
-    if (error) { showFlash('Save failed: ' + error.message); return }
+    if (error) {
+      showFlash('Save failed: ' + error.message + ( /type|check/i.test(error.message) ? ' — Run sql/010_meetings_calls_type_status.sql in Supabase to allow type message/visit.' : ''))
+      return
+    }
     setShowCreate(false)
     showFlash('Saved.')
     load()

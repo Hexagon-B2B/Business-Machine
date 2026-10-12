@@ -62,22 +62,29 @@ export default function Companies({ go }) {
         .select('company_id, status')
         .in('company_id', companyIds)
         .neq('state', 'deleted')
-        .in('status', ['open', 'in_progress']),
+        .in('status', ['open', 'in_progress'])
+        .then(r => r).catch(err => ({ data: null, error: err })),
       supabase.from('meetings_calls')
         .select('company_id')
         .in('company_id', companyIds)
-        .neq('state', 'deleted'),
+        .neq('state', 'deleted')
+        .then(r => r).catch(err => ({ data: null, error: err })),
       supabase.from('opportunities')
         .select('company_id, stage, deal_size')
         .in('company_id', companyIds)
-        .neq('state', 'deleted'),
+        .neq('state', 'deleted')
+        .then(r => r).catch(err => ({ data: null, error: err })),
     ])
+
+    if (tasksRes.error) console.warn('Companies activity tasks:', tasksRes.error.message || tasksRes.error)
+    if (callsRes.error) console.warn('Companies activity calls:', callsRes.error.message || callsRes.error)
+    if (oppsRes.error) console.warn('Companies activity opps:', oppsRes.error.message || oppsRes.error)
 
     for (const t of tasksRes.data || []) {
       if (map[t.company_id]) map[t.company_id].tasks += 1
     }
-    for (const c of callsRes.data || []) {
-      if (map[c.company_id]) map[c.company_id].calls += 1
+    for (const row of callsRes.data || []) {
+      if (map[row.company_id]) map[row.company_id].calls += 1
     }
     for (const o of oppsRes.data || []) {
       if (!map[o.company_id]) continue

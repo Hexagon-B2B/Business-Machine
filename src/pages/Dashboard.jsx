@@ -121,19 +121,6 @@ export default function Dashboard({ go }) {
         </button>
       </PageHead>
 
-      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Project</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>Hexagon B2B — Sales & Business OS</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Sole-operator POC · company-centric workspace</div>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <a className="btn" href="https://github.com/Hexagon-B2B/Business-Machine" target="_blank" rel="noreferrer">GitHub repo</a>
-          <a className="btn" href="https://hexagon-b2b-os.vercel.app" target="_blank" rel="noreferrer">Live app</a>
-          <button type="button" className="btn" onClick={() => setShowCfg(true)}>Settings (triggers)</button>
-        </div>
-      </div>
-
       {showCfg && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1e40af' }}>
           <h2 style={{ fontSize: 14, marginBottom: 8 }}>Trigger criteria (saved on this browser)</h2>

@@ -250,12 +250,18 @@ export default function CompanyDetail({ id, go }) {
     e.preventDefault()
     if (!oForm.requirement_description.trim()) return
     setSaving(true)
-    const { error } = await createOppWithOptionalTask(oForm, id)
+    const { data, error } = await createOppWithOptionalTask(oForm, id)
     setSaving(false)
     if (!error) {
       setShowOpp(false)
       setOForm({ ...EMPTY_OPP_FORM })
-      load()
+      await load()
+      if (data?.id) {
+        const { data: full } = await supabase.from('opportunities')
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id')
+          .eq('id', data.id).single()
+        if (full) setSelectedOpp(full)
+      }
     } else alert(error.message)
   }
 
@@ -380,8 +386,8 @@ export default function CompanyDetail({ id, go }) {
                   <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
                   <td>{ct.role || ct.job_title || '—'}</td>
                   <td>{ct.email || '—'}</td>
-                  <td>{ct.phone || '—'}</td>
-                  <td><button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => openEditContact(ct)}>Edit</button></td>
+                  <td>{[ct.phone, ct.phone_mobile_2, ct.phone_landline].filter(Boolean).join(' / ') || '—'}</td>
+                  <td><button type="button" className="btn" onClick={() => openEditContact(ct)}>Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -395,12 +401,12 @@ export default function CompanyDetail({ id, go }) {
             <thead><tr><th>Title</th><th>Priority</th><th>Status</th><th>Due</th><th></th></tr></thead>
             <tbody>
               {tasks.length === 0 ? <tr><td colSpan={5} className="empty">No tasks</td></tr> : tasks.map(t => (
-                <tr key={t.id}>
+                <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setEditTask({ ...t, due_at: (t.due_at || '').toString().slice(0, 10) })}>
                   <td style={{ fontWeight: 600 }}>{t.title}</td>
-                  <td><Badge>{t.priority}</Badge></td>
+                  <td>{t.priority}</td>
                   <td>{t.status}</td>
                   <td>{t.due_at ? new Date(t.due_at).toLocaleDateString() : '—'}</td>
-                  <td><button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setEditTask({ ...t, due_at: (t.due_at || '').toString().slice(0, 10) })}>Edit</button></td>
+                  <td><button type="button" className="btn" onClick={e => { e.stopPropagation(); setEditTask({ ...t, due_at: (t.due_at || '').toString().slice(0, 10) }) }}>Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -411,15 +417,15 @@ export default function CompanyDetail({ id, go }) {
       {tab === 'meetings' && (
         <div className="card">
           <table className="table">
-            <thead><tr><th>Type</th><th>Subject</th><th>Outcome</th><th>When</th><th></th></tr></thead>
+            <thead><tr><th>Type</th><th>Subject</th><th>When</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {meetings.length === 0 ? <tr><td colSpan={5} className="empty">No meetings</td></tr> : meetings.map(m => (
-                <tr key={m.id}>
-                  <td><Badge tone="blue">{m.type}</Badge></td>
+              {meetings.length === 0 ? <tr><td colSpan={5} className="empty">No meetings / calls</td></tr> : meetings.map(m => (
+                <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => setEditMeeting({ ...m, scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '' })}>
+                  <td>{m.type}</td>
                   <td style={{ fontWeight: 600 }}>{m.subject}</td>
-                  <td>{m.outcome || '—'}</td>
                   <td>{m.scheduled_at ? new Date(m.scheduled_at).toLocaleString() : '—'}</td>
-                  <td><button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setEditMeeting({ ...m, scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '' })}>Edit</button></td>
+                  <td>{m.status || '—'}</td>
+                  <td><button type="button" className="btn" onClick={e => { e.stopPropagation(); setEditMeeting({ ...m, scheduled_at: m.scheduled_at ? new Date(m.scheduled_at).toISOString().slice(0, 16) : '' }) }}>Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -433,13 +439,14 @@ export default function CompanyDetail({ id, go }) {
             Click a row to open the same opportunity form as the Opportunities tab (edit, stages, quotations with items / sub-items).
           </p>
           <table className="table">
-            <thead><tr><th>Name</th><th>Stage</th><th>Value</th></tr></thead>
+            <thead><tr><th>Name</th><th>Stage</th><th>Value</th><th>Close</th></tr></thead>
             <tbody>
-              {opps.length === 0 ? <tr><td colSpan={3} className="empty">No opportunities</td></tr> : opps.map(o => (
+              {opps.length === 0 ? <tr><td colSpan={4} className="empty">No opportunities</td></tr> : opps.map(o => (
                 <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedOpp(o)}>
-                  <td style={{ fontWeight: 600, color: '#2563eb' }}>{o.name || '—'}</td>
-                  <td><Badge>{oppStageLabel(o.stage)}</Badge></td>
+                  <td style={{ fontWeight: 600 }}>{o.name || '—'}</td>
+                  <td>{oppStageLabel(o.stage)}</td>
                   <td>{o.deal_size != null ? '₹' + Number(o.deal_size).toLocaleString('en-IN') : '—'}</td>
+                  <td>{o.expected_close_date ? new Date(o.expected_close_date).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -447,34 +454,118 @@ export default function CompanyDetail({ id, go }) {
         </div>
       )}
 
-      {showEdit && (
-        <Modal title="Edit Company" onClose={() => setShowEdit(false)} width={620}>
-          <form onSubmit={saveCompany}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Short name *"><input className="input" required value={eForm.name || ''} onChange={e => setEForm({ ...eForm, name: e.target.value })} /></Field>
-              <Field label="Full / legal name"><input className="input" value={eForm.legal_name || ''} onChange={e => setEForm({ ...eForm, legal_name: e.target.value })} /></Field>
-            </div>
-            <Field label="Primary address"><textarea className="input" rows={2} value={eForm.address || ''} onChange={e => setEForm({ ...eForm, address: e.target.value })} /></Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <Field label="City"><input className="input" value={eForm.city || ''} onChange={e => setEForm({ ...eForm, city: e.target.value })} /></Field>
-              <Field label="Pincode"><input className="input" value={eForm.pincode || ''} onChange={e => setEForm({ ...eForm, pincode: e.target.value })} /></Field>
-              <Field label="Country"><input className="input" value={eForm.country || ''} onChange={e => setEForm({ ...eForm, country: e.target.value })} /></Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="HQ location"><input className="input" value={eForm.hq_location || ''} onChange={e => setEForm({ ...eForm, hq_location: e.target.value })} /></Field>
-              <Field label="Employees"><input className="input" type="number" value={eForm.employee_count || ''} onChange={e => setEForm({ ...eForm, employee_count: e.target.value })} /></Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Board Tele No"><input className="input" value={eForm.board_no || ''} onChange={e => setEForm({ ...eForm, board_no: e.target.value })} /></Field>
-              <Field label="GST No"><input className="input" value={eForm.gst_no || ''} onChange={e => setEForm({ ...eForm, gst_no: e.target.value })} /></Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Website"><input className="input" value={eForm.website || ''} onChange={e => setEForm({ ...eForm, website: e.target.value })} /></Field>
-              <Field label="Email"><input className="input" value={eForm.email || ''} onChange={e => setEForm({ ...eForm, email: e.target.value })} /></Field>
-            </div>
-            <Field label="Industry"><input className="input" value={eForm.industry || ''} onChange={e => setEForm({ ...eForm, industry: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="input" rows={2} value={eForm.notes || ''} onChange={e => setEForm({ ...eForm, notes: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setShowEdit(false)} label="Save company" />
+      {showContact && (
+        <Modal title={editingContactId ? 'Edit contact' : 'Add contact'} onClose={() => setShowContact(false)} width={480}>
+          <form onSubmit={saveContact}>
+            <Field label="Full name *"><input className="input" required value={cForm.full_name} onChange={e => setCForm({ ...cForm, full_name: e.target.value })} /></Field>
+            <Field label="Job title"><input className="input" value={cForm.job_title} onChange={e => setCForm({ ...cForm, job_title: e.target.value })} /></Field>
+            <Field label="Role">
+              <select className="input" value={cForm.role} onChange={e => setCForm({ ...cForm, role: e.target.value })}>
+                <option value="">—</option>
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+            <Field label="Email"><input className="input" type="email" value={cForm.email} onChange={e => setCForm({ ...cForm, email: e.target.value })} /></Field>
+            <Field label="Mobile 1"><input className="input" value={cForm.phone} onChange={e => setCForm({ ...cForm, phone: e.target.value })} /></Field>
+            <Field label="Mobile 2"><input className="input" value={cForm.phone_mobile_2} onChange={e => setCForm({ ...cForm, phone_mobile_2: e.target.value })} /></Field>
+            <Field label="Landline"><input className="input" value={cForm.phone_landline} onChange={e => setCForm({ ...cForm, phone_landline: e.target.value })} /></Field>
+            <Field label="Extension"><input className="input" value={cForm.phone_extension} onChange={e => setCForm({ ...cForm, phone_extension: e.target.value })} /></Field>
+            <Actions saving={saving} onCancel={() => setShowContact(false)} label="Save contact" />
+          </form>
+        </Modal>
+      )}
+
+      {showTask && (
+        <Modal title="New task" onClose={() => setShowTask(false)} width={480}>
+          <form onSubmit={addTask}>
+            <Field label="Title *"><input className="input" required value={tForm.title} onChange={e => setTForm({ ...tForm, title: e.target.value })} /></Field>
+            <Field label="Description"><textarea className="input" rows={2} value={tForm.description} onChange={e => setTForm({ ...tForm, description: e.target.value })} /></Field>
+            <Field label="Priority">
+              <select className="input" value={tForm.priority} onChange={e => setTForm({ ...tForm, priority: e.target.value })}>
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+              </select>
+            </Field>
+            <Field label="Due"><input className="input" type="date" value={tForm.due_at} onChange={e => setTForm({ ...tForm, due_at: e.target.value })} /></Field>
+            <Field label="Contact">
+              <select className="input" value={tForm.contact_id} onChange={e => setTForm({ ...tForm, contact_id: e.target.value })}>
+                <option value="">—</option>
+                {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+              </select>
+            </Field>
+            <Actions saving={saving} onCancel={() => setShowTask(false)} label="Create task" />
+          </form>
+        </Modal>
+      )}
+
+      {editTask && (
+        <Modal title="Edit task" onClose={() => setEditTask(null)} width={480}>
+          <form onSubmit={saveEditTask}>
+            <Field label="Title *"><input className="input" required value={editTask.title || ''} onChange={e => setEditTask({ ...editTask, title: e.target.value })} /></Field>
+            <Field label="Description"><textarea className="input" rows={2} value={editTask.description || ''} onChange={e => setEditTask({ ...editTask, description: e.target.value })} /></Field>
+            <Field label="Priority">
+              <select className="input" value={editTask.priority || 'medium'} onChange={e => setEditTask({ ...editTask, priority: e.target.value })}>
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+              </select>
+            </Field>
+            <Field label="Status">
+              <select className="input" value={editTask.status || 'open'} onChange={e => setEditTask({ ...editTask, status: e.target.value })}>
+                <option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option><option value="cancelled">Cancelled</option>
+              </select>
+            </Field>
+            <Field label="Due"><input className="input" type="date" value={editTask.due_at || ''} onChange={e => setEditTask({ ...editTask, due_at: e.target.value })} /></Field>
+            <Actions saving={saving} onCancel={() => setEditTask(null)} label="Save task" />
+          </form>
+        </Modal>
+      )}
+
+      {showMeeting && (
+        <Modal title="Log call / meeting" onClose={() => setShowMeeting(false)} width={520}>
+          <form onSubmit={addMeeting}>
+            <Field label="Type">
+              <select className="input" value={mForm.type} onChange={e => setMForm({ ...mForm, type: e.target.value })}>
+                <option value="call">Call</option><option value="meeting">Meeting</option><option value="visit">Visit</option><option value="message">Message</option>
+              </select>
+            </Field>
+            <Field label="Subject *"><input className="input" required value={mForm.subject} onChange={e => setMForm({ ...mForm, subject: e.target.value })} /></Field>
+            <Field label="Notes"><textarea className="input" rows={2} value={mForm.description} onChange={e => setMForm({ ...mForm, description: e.target.value })} /></Field>
+            <Field label="Outcome"><input className="input" value={mForm.outcome} onChange={e => setMForm({ ...mForm, outcome: e.target.value })} /></Field>
+            <Field label="Next action"><input className="input" value={mForm.next_action} onChange={e => setMForm({ ...mForm, next_action: e.target.value })} /></Field>
+            <Field label="When"><input className="input" type="datetime-local" value={mForm.scheduled_at} onChange={e => setMForm({ ...mForm, scheduled_at: e.target.value })} /></Field>
+            <Field label="Status">
+              <select className="input" value={mForm.status} onChange={e => setMForm({ ...mForm, status: e.target.value })}>
+                <option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option>
+              </select>
+            </Field>
+            <Field label="Contact">
+              <select className="input" value={mForm.contact_id} onChange={e => setMForm({ ...mForm, contact_id: e.target.value })}>
+                <option value="">—</option>
+                {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+              </select>
+            </Field>
+            <Actions saving={saving} onCancel={() => setShowMeeting(false)} label="Save" />
+          </form>
+        </Modal>
+      )}
+
+      {editMeeting && (
+        <Modal title="Edit call / meeting" onClose={() => setEditMeeting(null)} width={520}>
+          <form onSubmit={saveEditMeeting}>
+            <Field label="Type">
+              <select className="input" value={editMeeting.type || 'call'} onChange={e => setEditMeeting({ ...editMeeting, type: e.target.value })}>
+                <option value="call">Call</option><option value="meeting">Meeting</option><option value="visit">Visit</option><option value="message">Message</option>
+              </select>
+            </Field>
+            <Field label="Subject *"><input className="input" required value={editMeeting.subject || ''} onChange={e => setEditMeeting({ ...editMeeting, subject: e.target.value })} /></Field>
+            <Field label="Notes"><textarea className="input" rows={2} value={editMeeting.description || ''} onChange={e => setEditMeeting({ ...editMeeting, description: e.target.value })} /></Field>
+            <Field label="Outcome"><input className="input" value={editMeeting.outcome || ''} onChange={e => setEditMeeting({ ...editMeeting, outcome: e.target.value })} /></Field>
+            <Field label="Next action"><input className="input" value={editMeeting.next_action || ''} onChange={e => setEditMeeting({ ...editMeeting, next_action: e.target.value })} /></Field>
+            <Field label="When"><input className="input" type="datetime-local" value={editMeeting.scheduled_at || ''} onChange={e => setEditMeeting({ ...editMeeting, scheduled_at: e.target.value })} /></Field>
+            <Field label="Status">
+              <select className="input" value={editMeeting.status || 'open'} onChange={e => setEditMeeting({ ...editMeeting, status: e.target.value })}>
+                <option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option>
+              </select>
+            </Field>
+            <Actions saving={saving} onCancel={() => setEditMeeting(null)} label="Save" />
           </form>
         </Modal>
       )}
@@ -494,115 +585,78 @@ export default function CompanyDetail({ id, go }) {
             opportunity={{ ...selectedOpp, companies: { name: company?.name } }}
             contacts={contacts}
             onClose={() => setSelectedOpp(null)}
-            onSaved={() => { setSelectedOpp(null); load() }}
+            onSaved={() => { load() }}
+            initialShowQuote
           />
         </Modal>
       )}
 
-      {showContact && (
-        <Modal title={editingContactId ? 'Edit contact' : 'Add contact'} onClose={() => setShowContact(false)}>
-          <form onSubmit={saveContact}>
-            <Field label="Full name *"><input className="input" required value={cForm.full_name} onChange={e => setCForm({ ...cForm, full_name: e.target.value })} /></Field>
-            <Field label="Job title"><input className="input" value={cForm.job_title} onChange={e => setCForm({ ...cForm, job_title: e.target.value })} /></Field>
-            <Field label="Role"><select className="input" value={cForm.role} onChange={e => setCForm({ ...cForm, role: e.target.value })}><option value="">—</option>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select></Field>
-            <Field label="Email"><input className="input" value={cForm.email} onChange={e => setCForm({ ...cForm, email: e.target.value })} /></Field>
-            <Field label="Mobile"><input className="input" value={cForm.phone} onChange={e => setCForm({ ...cForm, phone: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setShowContact(false)} label="Save contact" />
-          </form>
-        </Modal>
-      )}
-
-      {showTask && (
-        <Modal title="New task" onClose={() => setShowTask(false)}>
-          <form onSubmit={addTask}>
-            <Field label="Title *"><input className="input" required value={tForm.title} onChange={e => setTForm({ ...tForm, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="input" rows={2} value={tForm.description} onChange={e => setTForm({ ...tForm, description: e.target.value })} /></Field>
+      {showEdit && (
+        <Modal title="Edit company" onClose={() => setShowEdit(false)} width={640}>
+          <form onSubmit={saveCompany}>
+            <Field label="Name *"><input className="input" required value={eForm.name || ''} onChange={e => setEForm({ ...eForm, name: e.target.value })} /></Field>
+            <Field label="Legal name"><input className="input" value={eForm.legal_name || ''} onChange={e => setEForm({ ...eForm, legal_name: e.target.value })} /></Field>
+            <Field label="Address"><textarea className="input" rows={2} value={eForm.address || ''} onChange={e => setEForm({ ...eForm, address: e.target.value })} /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Priority"><select className="input" value={tForm.priority} onChange={e => setTForm({ ...tForm, priority: e.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></Field>
-              <Field label="Due"><input className="input" type="date" value={tForm.due_at} onChange={e => setTForm({ ...tForm, due_at: e.target.value })} /></Field>
+              <Field label="City"><input className="input" value={eForm.city || ''} onChange={e => setEForm({ ...eForm, city: e.target.value })} /></Field>
+              <Field label="Pincode"><input className="input" value={eForm.pincode || ''} onChange={e => setEForm({ ...eForm, pincode: e.target.value })} /></Field>
             </div>
-            <Actions saving={saving} onCancel={() => setShowTask(false)} label="Create task" />
-          </form>
-        </Modal>
-      )}
-
-      {showMeeting && (
-        <Modal title="Log call / meeting" onClose={() => setShowMeeting(false)} width={560}>
-          <form onSubmit={addMeeting}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Type"><select className="input" value={mForm.type} onChange={e => setMForm({ ...mForm, type: e.target.value })}><option value="call">Call</option><option value="meeting">Meeting</option><option value="visit">Visit</option><option value="message">Message</option></select></Field>
-              <Field label="Status"><select className="input" value={mForm.status} onChange={e => setMForm({ ...mForm, status: e.target.value })}><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option></select></Field>
+              <Field label="HQ location"><input className="input" value={eForm.hq_location || ''} onChange={e => setEForm({ ...eForm, hq_location: e.target.value })} /></Field>
+              <Field label="Country"><input className="input" value={eForm.country || ''} onChange={e => setEForm({ ...eForm, country: e.target.value })} /></Field>
             </div>
-            <Field label="Subject *"><input className="input" required value={mForm.subject} onChange={e => setMForm({ ...mForm, subject: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="input" rows={2} value={mForm.description} onChange={e => setMForm({ ...mForm, description: e.target.value })} /></Field>
-            <Field label="Outcome"><input className="input" value={mForm.outcome} onChange={e => setMForm({ ...mForm, outcome: e.target.value })} /></Field>
-            <Field label="Next action"><input className="input" value={mForm.next_action} onChange={e => setMForm({ ...mForm, next_action: e.target.value })} /></Field>
-            <Field label="When"><input className="input" type="datetime-local" value={mForm.scheduled_at} onChange={e => setMForm({ ...mForm, scheduled_at: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setShowMeeting(false)} label="Save" />
-          </form>
-        </Modal>
-      )}
-
-      {editTask && (
-        <Modal title="Edit task" onClose={() => setEditTask(null)}>
-          <form onSubmit={saveEditTask}>
-            <Field label="Title"><input className="input" value={editTask.title || ''} onChange={e => setEditTask({ ...editTask, title: e.target.value })} /></Field>
-            <Field label="Description"><textarea className="input" rows={2} value={editTask.description || ''} onChange={e => setEditTask({ ...editTask, description: e.target.value })} /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Priority"><select className="input" value={editTask.priority || 'medium'} onChange={e => setEditTask({ ...editTask, priority: e.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></Field>
-              <Field label="Status"><select className="input" value={editTask.status || 'open'} onChange={e => setEditTask({ ...editTask, status: e.target.value })}><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option></select></Field>
+              <Field label="Employees"><input className="input" type="number" value={eForm.employee_count || ''} onChange={e => setEForm({ ...eForm, employee_count: e.target.value })} /></Field>
+              <Field label="Board Tele No"><input className="input" value={eForm.board_no || ''} onChange={e => setEForm({ ...eForm, board_no: e.target.value })} /></Field>
             </div>
-            <Field label="Due"><input className="input" type="date" value={editTask.due_at || ''} onChange={e => setEditTask({ ...editTask, due_at: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setEditTask(null)} label="Save" />
-          </form>
-        </Modal>
-      )}
-
-      {editMeeting && (
-        <Modal title="Edit call / meeting" onClose={() => setEditMeeting(null)} width={560}>
-          <form onSubmit={saveEditMeeting}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Type"><select className="input" value={editMeeting.type || 'call'} onChange={e => setEditMeeting({ ...editMeeting, type: e.target.value })}><option value="call">Call</option><option value="meeting">Meeting</option><option value="visit">Visit</option><option value="message">Message</option></select></Field>
-              <Field label="Status"><select className="input" value={editMeeting.status || 'open'} onChange={e => setEditMeeting({ ...editMeeting, status: e.target.value })}><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option></select></Field>
+              <Field label="Website"><input className="input" value={eForm.website || ''} onChange={e => setEForm({ ...eForm, website: e.target.value })} /></Field>
+              <Field label="Email"><input className="input" type="email" value={eForm.email || ''} onChange={e => setEForm({ ...eForm, email: e.target.value })} /></Field>
             </div>
-            <Field label="Subject *"><input className="input" required value={editMeeting.subject || ''} onChange={e => setEditMeeting({ ...editMeeting, subject: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="input" rows={2} value={editMeeting.description || ''} onChange={e => setEditMeeting({ ...editMeeting, description: e.target.value })} /></Field>
-            <Field label="Outcome"><input className="input" value={editMeeting.outcome || ''} onChange={e => setEditMeeting({ ...editMeeting, outcome: e.target.value })} /></Field>
-            <Field label="Next action"><input className="input" value={editMeeting.next_action || ''} onChange={e => setEditMeeting({ ...editMeeting, next_action: e.target.value })} /></Field>
-            <Field label="When"><input className="input" type="datetime-local" value={editMeeting.scheduled_at || ''} onChange={e => setEditMeeting({ ...editMeeting, scheduled_at: e.target.value })} /></Field>
-            <Actions saving={saving} onCancel={() => setEditMeeting(null)} label="Save" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="GST No"><input className="input" value={eForm.gst_no || ''} onChange={e => setEForm({ ...eForm, gst_no: e.target.value })} /></Field>
+              <Field label="Industry"><input className="input" value={eForm.industry || ''} onChange={e => setEForm({ ...eForm, industry: e.target.value })} /></Field>
+            </div>
+            <Field label="Notes"><textarea className="input" rows={2} value={eForm.notes || ''} onChange={e => setEForm({ ...eForm, notes: e.target.value })} /></Field>
+            <Actions saving={saving} onCancel={() => setShowEdit(false)} label="Save company" />
           </form>
         </Modal>
       )}
 
       {showNotQualified && (
-        <Modal title="Not Qualified — reason" onClose={() => setShowNotQualified(false)}>
+        <Modal title="Not Qualified — reason" onClose={() => setShowNotQualified(false)} width={420}>
           <form onSubmit={saveNotQualified}>
             <Field label="Reason *">
               <select className="input" required value={nqReason} onChange={e => setNqReason(e.target.value)}>
                 <option value="">Select…</option>
-                {NOT_QUALIFIED_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {NOT_QUALIFIED_REASONS.map(r => <option key={r} value={r}>{notQualifiedReasonLabel(r)}</option>)}
               </select>
             </Field>
-            <Actions saving={saving} onCancel={() => setShowNotQualified(false)} label="Save" />
+            <Actions saving={false} onCancel={() => setShowNotQualified(false)} label="Confirm" />
           </form>
         </Modal>
       )}
 
       {showResearch && (
-        <Modal title="Research" onClose={() => setShowResearch(false)}>
-          <p style={{ fontSize: 13, color: '#64748b' }}>Queue research for this company from Research & Signals, or log a signal below.</p>
+        <Modal title="Log research signal" onClose={() => setShowResearch(false)} width={480}>
           <form onSubmit={async e => {
             e.preventDefault()
+            if (!sigForm.observation.trim()) return
             setResearchBusy(true)
             const { error } = await supabase.from('signals').insert({
-              company_id: id, signal_type: sigForm.signal_type, observation: sigForm.observation, source: sigForm.source || null, state: 'active',
+              company_id: id, signal_type: sigForm.signal_type, observation: sigForm.observation.trim(),
+              source: sigForm.source || null, state: 'active',
             })
             setResearchBusy(false)
             if (!error) { setShowResearch(false); setSigForm({ signal_type: 'news', observation: '', source: '' }); load() }
-            else alert(error.message)
+            else setResearchMsg(error.message)
           }}>
-            <Field label="Signal type"><select className="input" value={sigForm.signal_type} onChange={e => setSigForm({ ...sigForm, signal_type: e.target.value })}><option value="news">News</option><option value="hiring">Hiring</option><option value="funding">Funding</option><option value="other">Other</option></select></Field>
+            {researchMsg && <div className="notice">{researchMsg}</div>}
+            <Field label="Type">
+              <select className="input" value={sigForm.signal_type} onChange={e => setSigForm({ ...sigForm, signal_type: e.target.value })}>
+                <option value="news">News</option><option value="website">Website</option><option value="tender">Tender</option><option value="other">Other</option>
+              </select>
+            </Field>
             <Field label="Observation *"><textarea className="input" required rows={3} value={sigForm.observation} onChange={e => setSigForm({ ...sigForm, observation: e.target.value })} /></Field>
             <Field label="Source"><input className="input" value={sigForm.source} onChange={e => setSigForm({ ...sigForm, source: e.target.value })} /></Field>
             <Actions saving={researchBusy} onCancel={() => setShowResearch(false)} label="Save signal" />

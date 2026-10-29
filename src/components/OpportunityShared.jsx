@@ -39,17 +39,10 @@ export function emptyOppForm() {
 }
 export const EMPTY_OPP_FORM = emptyOppForm()
 
-export function FirstQuoteFields({ form, setForm }) {
+export function FirstQuoteFields() {
   return (
-    <div style={{ marginTop: 14, padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>First quotation</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <Field label="Quote validity"><input className="input" type="date" value={form.validity_date || ''} onChange={e => setForm({ ...form, validity_date: e.target.value })} /></Field>
-        <Field label="Delivery TAT"><input className="input" value={form.delivery_tat || ''} onChange={e => setForm({ ...form, delivery_tat: e.target.value })} placeholder="e.g. 2–3 weeks" /></Field>
-        <Field label="Payment terms"><input className="input" value={form.payment_terms || ''} onChange={e => setForm({ ...form, payment_terms: e.target.value })} /></Field>
-        <Field label="Transport"><input className="input" value={form.transport_terms || ''} onChange={e => setForm({ ...form, transport_terms: e.target.value })} /></Field>
-      </div>
-      <p style={{ fontSize: 12, color: '#64748b' }}>Add products after create via Quotations → Copy for Excel includes validity + TAT.</p>
+    <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, color: '#64748b' }}>
+      After create, open the opportunity → <strong>Quotations</strong> to set validity, delivery TAT, products, charges, and <strong>Copy for Excel</strong>.
     </div>
   )
 }
@@ -70,7 +63,7 @@ export function OpportunityCreateFields({ form, setForm, contacts = [] }) {
       </div>
       <Field label="Next action"><input className="input" value={form.next_action} onChange={e => setForm({ ...form, next_action: e.target.value })} /></Field>
       <Field label="Primary contact"><select className="input" value={form.primary_contact_id} onChange={e => setForm({ ...form, primary_contact_id: e.target.value })}><option value="">—</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></Field>
-      <FirstQuoteFields form={form} setForm={setForm} />
+      <FirstQuoteFields />
     </>
   )
 }
@@ -171,16 +164,6 @@ export async function createOppWithOptionalTask(form, companyId) {
       description: 'From opportunity: ' + (payload.name || ''),
       due_at: form.next_action_due, priority: 'medium', status: 'open', source: 'user', state: 'active',
     })
-  }
-  const items = Array.isArray(form.quote_items) ? form.quote_items : []
-  const hasLines = items.some(it => (it.product_name || '').trim() || (it.line_type === 'charge' && (Number(it.customer_price) || 0) > 0))
-  if (hasLines && data?.id) {
-    const { error: qErr } = await saveQuotation({
-      opportunityId: data.id, companyId, items, status: 'draft',
-      validity_date: form.validity_date || null, delivery_tat: form.delivery_tat || null,
-      payment_terms: form.payment_terms || null, transport_terms: form.transport_terms || null,
-    })
-    if (qErr) console.warn('First quote save:', qErr.message)
   }
   return { data, error: null }
 }

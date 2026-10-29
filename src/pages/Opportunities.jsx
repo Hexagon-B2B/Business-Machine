@@ -48,6 +48,7 @@ export default function Opportunities({ go }) {
   const [sortDir, setSortDir] = useState('desc')
   const [showCreate, setShowCreate] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [openQuotes, setOpenQuotes] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_OPP_FORM })
   const [companies, setCompanies] = useState([])
   const [contacts, setContacts] = useState([])
@@ -159,15 +160,24 @@ export default function Opportunities({ go }) {
     if (data?.id) await logActivity({ entityType: 'opportunity', entityId: data.id, action: 'create', summary: 'Opportunity created' })
     setShowCreate(false)
     setForm({ ...EMPTY_OPP_FORM })
-    showMsg('Opportunity created.')
-    load()
+    showMsg('Opportunity created — add quote items (base product + sub-items).')
+    await load()
+    if (data?.id) {
+      const { data: full } = await supabase.from('opportunities')
+        .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name)')
+        .eq('id', data.id).single()
+      if (full) {
+        setOpenQuotes(true)
+        setSelected(full)
+      }
+    }
   }
 
   const boardCols = OPP_STAGES.filter(s => s !== 'won' && s !== 'lost')
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Same form as Company → New opportunity. Pipeline value prefers latest quote total (ex-tax). Quotes: base product + sub-items + charges.">
+      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Same form as Company → New opportunity. After create, add quote items (base product + sub-items). Quote total drives pipeline value.">
         <button type="button" className="btn" onClick={() => setView(v => v === 'board' ? 'list' : 'board')}>{view === 'board' ? 'List view' : 'Board view'}</button>
         <button type="button" className="btn primary" onClick={() => { setForm({ ...EMPTY_OPP_FORM }); setShowCreate(true) }}>+ New opportunity</button>
       </PageHead>
@@ -205,7 +215,7 @@ export default function Opportunities({ go }) {
                 <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>{oppStageLabel(st)} ({list.length})</h4>
                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{meta?.pct != null ? meta.pct + '% · ' : ''}{formatInr(colVal)}</div>
                 {list.map(r => (
-                  <div key={r.id} className="opp-card" onClick={() => setSelected(r)} style={{ cursor: 'pointer', padding: 10, marginBottom: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <div key={r.id} className="opp-card" onClick={() => { setOpenQuotes(false); setSelected(r) }} style={{ cursor: 'pointer', padding: 10, marginBottom: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name || '—'}</div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>{r.companies?.name || '—'}</div>
                     <div style={{ fontSize: 12, color: '#065f46' }}>{formatInr(displayValue(r))}</div>
@@ -235,7 +245,7 @@ export default function Opportunities({ go }) {
           pageSize={PAGE_SIZE}
           total={total}
           onPage={setPage}
-          onRowClick={setSelected}
+          onRowClick={r => { setOpenQuotes(false); setSelected(r) }}
           empty="No opportunities"
           selectable
           selectedIds={checked}
@@ -258,13 +268,14 @@ export default function Opportunities({ go }) {
       )}
 
       {selected && (
-        <Modal title={selected.name || 'Opportunity'} onClose={() => setSelected(null)} width={640}>
+        <Modal title={selected.name || 'Opportunity'} onClose={() => { setSelected(null); setOpenQuotes(false) }} width={640}>
           <OpportunityDetail
             opportunity={selected}
             contacts={contacts}
-            onClose={() => setSelected(null)}
+            onClose={() => { setSelected(null); setOpenQuotes(false) }}
             onSaved={() => { load() }}
-            goCompany={(cid) => { setSelected(null); go('company', cid) }}
+            goCompany={(cid) => { setSelected(null); setOpenQuotes(false); go('company', cid) }}
+            initialShowQuote={openQuotes}
           />
         </Modal>
       )}

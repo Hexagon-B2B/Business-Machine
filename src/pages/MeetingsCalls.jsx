@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { PageHead, DataTable, Badge, Modal, Field, Actions } from '../ui'
+import { PageHead, DataTable, Badge, Modal, Field, Actions, CompanySearchSelect } from '../ui'
 
 const TYPES = ['call', 'meeting', 'visit', 'message']
 const STATUSES = [
@@ -36,7 +36,7 @@ export default function MeetingsCalls({ go }) {
 
   useEffect(() => {
     load()
-    supabase.from('companies').select('id, name').eq('state', 'active').order('name').limit(2000)
+    supabase.from('companies').select('id, name, city').neq('state', 'deleted').order('name').limit(3000)
       .then(({ data }) => setCompanies(data || []))
   }, [])
 
@@ -131,7 +131,6 @@ export default function MeetingsCalls({ go }) {
       metadata: {},
     }
     let { error } = await supabase.from('meetings_calls').insert(payload)
-    // Retry without metadata if column missing
     if (error && /metadata|column/i.test(error.message)) {
       const { metadata, ...rest } = payload
       ;({ error } = await supabase.from('meetings_calls').insert(rest))
@@ -219,10 +218,7 @@ export default function MeetingsCalls({ go }) {
         <Modal title="Log call / meeting" onClose={() => setShowCreate(false)} width={520}>
           <form onSubmit={createItem}>
             <Field label="Company *">
-              <select className="input" required value={form.company_id} onChange={e => setForm({ ...form, company_id: e.target.value })}>
-                <option value="">Select company…</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <CompanySearchSelect companies={companies} value={form.company_id} onChange={id => setForm({ ...form, company_id: id })} required />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Type">

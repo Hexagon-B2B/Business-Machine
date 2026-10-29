@@ -4,6 +4,7 @@ import { OPP_STAGES, OPP_STAGE_META, PAGE_SIZE, oppStageLabel } from '../constan
 import { PageHead, FilterTabs, DataTable, Modal, Field, Actions, Badge, CompanySearchSelect } from '../ui'
 import {
   EMPTY_OPP_FORM,
+  emptyOppForm,
   OpportunityCreateFields,
   OpportunityDetail,
   createOppWithOptionalTask,
@@ -20,8 +21,8 @@ function stageTone(stage) {
 function quoteTotal(o) {
   const quotes = o?.metadata?.quotes
   if (!Array.isArray(quotes) || !quotes.length) return null
-  const latest = quotes[quotes.length - 1]
-  const t = latest?.totals?.total_ex_tax ?? latest?.total_ex_tax ?? latest?.totals?.grand_total
+  const latest = [...quotes].sort((a, b) => (Number(b.version) || 0) - (Number(a.version) || 0))[0]
+  const t = latest?.total_value ?? latest?.totals?.total_ex_tax ?? latest?.total_ex_tax
   return t != null && !Number.isNaN(Number(t)) ? Number(t) : null
 }
 
@@ -49,7 +50,7 @@ export default function Opportunities({ go }) {
   const [showCreate, setShowCreate] = useState(false)
   const [selected, setSelected] = useState(null)
   const [openQuotes, setOpenQuotes] = useState(false)
-  const [form, setForm] = useState({ ...EMPTY_OPP_FORM })
+  const [form, setForm] = useState(() => emptyOppForm())
   const [companies, setCompanies] = useState([])
   const [contacts, setContacts] = useState([])
   const [saving, setSaving] = useState(false)
@@ -151,6 +152,7 @@ export default function Opportunities({ go }) {
 
   async function createOpp(e) {
     e.preventDefault()
+    if (saving) return
     if (!form.company_id) { showMsg('Select a company.'); return }
     if (!form.requirement_description.trim()) { showMsg('Requirement is required.'); return }
     setSaving(true)
@@ -159,8 +161,8 @@ export default function Opportunities({ go }) {
     if (error) { showMsg('Create failed: ' + error.message); return }
     if (data?.id) await logActivity({ entityType: 'opportunity', entityId: data.id, action: 'create', summary: 'Opportunity created' })
     setShowCreate(false)
-    setForm({ ...EMPTY_OPP_FORM })
-    showMsg('Opportunity created. First quote saved if product lines were filled.')
+    setForm(emptyOppForm())
+    showMsg('Opportunity saved. Open it to edit quotes or Copy for Excel.')
     await load()
     if (data?.id) {
       const { data: full } = await supabase.from('opportunities')
@@ -177,9 +179,9 @@ export default function Opportunities({ go }) {
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Same form as Company → New opportunity. First quotation (base product + sub-items) on create. Quote total drives pipeline value.">
+      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Create deal + first quote (validity, TAT, products). Open a card to edit / Copy for Excel.">
         <button type="button" className="btn" onClick={() => setView(v => v === 'board' ? 'list' : 'board')}>{view === 'board' ? 'List view' : 'Board view'}</button>
-        <button type="button" className="btn primary" onClick={() => { setForm({ ...EMPTY_OPP_FORM }); setShowCreate(true) }}>+ New opportunity</button>
+        <button type="button" className="btn primary" onClick={() => { setForm(emptyOppForm()); setShowCreate(true) }}>+ New opportunity</button>
       </PageHead>
 
       {flash && <div className="notice" style={{ marginBottom: 12 }}>{flash}</div>}
@@ -215,7 +217,7 @@ export default function Opportunities({ go }) {
                 <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>{oppStageLabel(st)} ({list.length})</h4>
                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{meta?.pct != null ? meta.pct + '% · ' : ''}{formatInr(colVal)}</div>
                 {list.map(r => (
-                  <div key={r.id} className="opp-card" onClick={() => { setOpenQuotes(false); setSelected(r) }} style={{ cursor: 'pointer', padding: 10, marginBottom: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <div key={r.id} className="opp-card" onClick={() => { setOpenQuotes(true); setSelected(r) }} style={{ cursor: 'pointer', padding: 10, marginBottom: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name || '—'}</div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>{r.companies?.name || '—'}</div>
                     <div style={{ fontSize: 12, color: '#065f46' }}>{formatInr(displayValue(r))}</div>
@@ -245,7 +247,7 @@ export default function Opportunities({ go }) {
           pageSize={PAGE_SIZE}
           total={total}
           onPage={setPage}
-          onRowClick={r => { setOpenQuotes(false); setSelected(r) }}
+          onRowClick={r => { setOpenQuotes(true); setSelected(r) }}
           empty="No opportunities"
           selectable
           selectedIds={checked}
@@ -255,7 +257,7 @@ export default function Opportunities({ go }) {
       )}
 
       {showCreate && (
-        <Modal title="New opportunity" onClose={() => setShowCreate(false)} width={720}>
+        <Modal title="New opportunity" onClose={() => setShowCreate(false)} width={920}>
           <form onSubmit={createOpp}>
             <Field label="Company *">
               <CompanySearchSelect companies={companies} value={form.company_id}
@@ -268,7 +270,7 @@ export default function Opportunities({ go }) {
       )}
 
       {selected && (
-        <Modal title={selected.name || 'Opportunity'} onClose={() => { setSelected(null); setOpenQuotes(false) }} width={640}>
+        <Modal title={selected.name || 'Opportunity'} onClose={() => { setSelected(null); setOpenQuotes(false) }} width={900}>
           <OpportunityDetail
             opportunity={selected}
             contacts={contacts}

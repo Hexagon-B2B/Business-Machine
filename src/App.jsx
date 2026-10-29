@@ -8,6 +8,7 @@ import Tasks from './pages/Tasks'
 import MeetingsCalls from './pages/MeetingsCalls'
 import Opportunities from './pages/Opportunities'
 import Research from './pages/Research'
+import Settings from './pages/Settings'
 import Trash from './pages/Trash'
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
     ['opportunities', 'Opportunities'],
     ['research', 'Research & Signals'],
     ['trash', 'Deleted items'],
+    ['settings', 'Settings'],
   ]
 
   const pageLabel = page === 'company'
@@ -125,6 +127,7 @@ export default function App() {
         {page === 'opportunities' && <Opportunities go={go} />}
         {page === 'research' && <Research go={go} />}
         {page === 'trash' && <Trash go={go} />}
+        {page === 'settings' && <Settings />}
       </main>
     </div>
   )

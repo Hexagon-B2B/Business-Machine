@@ -23,6 +23,8 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
 
   function renderUpgrade(u) {
     const xfer = lineTransferTotal(u)
+    const pct = Number(u.margin_pct || u.min_margin_pct) || 0
+    const extra = Math.round(xfer * pct / 100 * 100) / 100
     return (
       <div key={u.id} style={{ marginLeft: 12, marginBottom: 6, padding: 8, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
@@ -52,15 +54,16 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
           </div>
           <div>
             <MiniLabel>Std markup %</MiniLabel>
-            <input className="input" type="number" value={u.margin_pct ?? u.min_margin_pct ?? ''}
+            <input className="input" type="number" value={u.margin_pct ?? ''}
               onChange={e => {
                 setItem(u.id, 'margin_pct', e.target.value)
                 setItem(u.id, 'min_margin_pct', e.target.value)
-              }} placeholder="%" />
+              }} placeholder="%" title="Extra margin on this sub-item TP only" />
           </div>
         </div>
         <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-          TP ₹{xfer.toLocaleString('en-IN')} · rolls into parent commercial total (no separate customer line)
+          TP ₹{xfer.toLocaleString('en-IN')}
+          {pct ? ` · Std markup ${pct}% → +₹${extra.toLocaleString('en-IN')} extra margin on package` : ' · rolls into parent TP'}
         </div>
       </div>
     )
@@ -73,13 +76,14 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
     return (
       <div key={prod.id} style={{ marginBottom: 12 }}>
         <div style={{ padding: 10, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
             <Badge tone="gray">Base product</Badge>
             {g.upgrades.length > 0 && <Badge tone="blue">{g.upgrades.length} sub-item(s)</Badge>}
+            {(prod.optionality === 'optional') && <Badge tone="yellow">Optional</Badge>}
             {g.belowMin && <Badge tone="red">Below min {g.minMarginPct}%</Badge>}
             <button type="button" className="btn" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => removeItem(prod.id)}>×</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.9fr', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 0.9fr 0.7fr', gap: 6 }}>
             <div>
               <MiniLabel>Description *</MiniLabel>
               <input className="input" value={prod.product_name || ''} onChange={e => setItem(prod.id, 'product_name', e.target.value)} placeholder="What is being sold" />
@@ -91,6 +95,14 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
             <div>
               <MiniLabel>Vendor</MiniLabel>
               <input className="input" value={prod.vendor || ''} onChange={e => setItem(prod.id, 'vendor', e.target.value)} placeholder="Vendor" />
+            </div>
+            <div>
+              <MiniLabel>Mandatory / Optional</MiniLabel>
+              <select className="input" value={prod.optionality || 'mandatory'}
+                onChange={e => setItem(prod.id, 'optionality', e.target.value)}>
+                <option value="mandatory">Mandatory</option>
+                <option value="optional">Optional</option>
+              </select>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '0.5fr 0.75fr 0.65fr 0.75fr 0.55fr', gap: 6, marginTop: 8 }}>
@@ -105,12 +117,12 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
             <div>
               <MiniLabel>% Markup</MiniLabel>
               <input className="input" type="number" value={prod.margin_pct ?? ''}
-                onChange={e => applyGroupMargin(prod.id, e.target.value)} placeholder="e.g. 25" title="Sets customer rate from group transfer + %" />
+                onChange={e => applyGroupMargin(prod.id, e.target.value)} placeholder="e.g. 25" />
             </div>
             <div>
               <MiniLabel>Customer rate ₹</MiniLabel>
               <input className="input" type="number" value={prod.customer_price ?? ''}
-                onChange={e => setGroupCustomer(prod.id, e.target.value)} placeholder="Or enter amount" title="Direct amount; markup % recalculates" />
+                onChange={e => setGroupCustomer(prod.id, e.target.value)} placeholder="Or amount" />
             </div>
             <div>
               <MiniLabel>Min mgn %</MiniLabel>
@@ -118,11 +130,11 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
             </div>
           </div>
           <div style={{ marginTop: 8, padding: 8, background: '#f8fafc', borderRadius: 6, fontSize: 12 }}>
-            <div style={{ fontWeight: 600 }}>Commercial line (rolled with sub-items)</div>
+            <div style={{ fontWeight: 600 }}>Commercial line</div>
             <div>{g.mergedDescription || '—'}</div>
             <div style={{ color: '#475569' }}>
               TP ₹{g.transferTotal.toLocaleString('en-IN')} → Cust ₹{g.customerTotal.toLocaleString('en-IN')}
-              {' · '}Rate/unit ₹{unitRate.toLocaleString('en-IN')}
+              {' · '}Rate ₹{unitRate.toLocaleString('en-IN')}
               {' · '}Markup {g.marginPct}%
               {' · '}Profit ₹{profit.toLocaleString('en-IN')}
             </div>
@@ -138,35 +150,35 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
     <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, marginBottom: 12 }}>
       <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
         {mode === 'revise'
-          ? `Revise ${baseQuote?.quotation_no || ''} V${baseQuote?.version} → V${(Number(baseQuote?.version) || 1) + 1}`
+          ? `Revise ${baseQuote?.quotation_no || ''} → next version`
           : 'New quotation'}
       </div>
       {mode === 'revise' && (
         <Field label="Revision reason *">
           <input className="input" value={form.revision_reason}
             onChange={e => setForm({ ...form, revision_reason: e.target.value })}
-            placeholder="Required — e.g. Added base product · RAM upgrade" />
+            placeholder="Required — e.g. Added RAM upgrade" />
         </Field>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
         <Field label="Validity">
-          <input className="input" type="date" value={form.validity_date} onChange={e => setForm({ ...form, validity_date: e.target.value })} />
+          <input className="input" type="date" value={form.validity_date || ''} onChange={e => setForm({ ...form, validity_date: e.target.value })} />
         </Field>
         <Field label="Delivery TAT">
-          <input className="input" value={form.delivery_tat} onChange={e => setForm({ ...form, delivery_tat: e.target.value })} placeholder="e.g. 2–3 weeks" />
+          <input className="input" value={form.delivery_tat || ''} onChange={e => setForm({ ...form, delivery_tat: e.target.value })} placeholder="e.g. 2–3 weeks" />
         </Field>
         <Field label="Payment">
-          <input className="input" value={form.payment_terms} onChange={e => setForm({ ...form, payment_terms: e.target.value })} placeholder="e.g. 50% advance" />
+          <input className="input" value={form.payment_terms || ''} onChange={e => setForm({ ...form, payment_terms: e.target.value })} placeholder="e.g. 50% advance" />
         </Field>
         <Field label="Status">
-          <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+          <select className="input" value={form.status || 'draft'} onChange={e => setForm({ ...form, status: e.target.value })}>
             {QUOTE_STATUS.filter(s => s !== 'superseded').map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
         <Field label="Transport terms">
-          <input className="input" value={form.transport_terms || ''} onChange={e => setForm({ ...form, transport_terms: e.target.value })} placeholder="e.g. Ex-works / FOR site" />
+          <input className="input" value={form.transport_terms || ''} onChange={e => setForm({ ...form, transport_terms: e.target.value })} placeholder="Ex-works / FOR" />
         </Field>
         <Field label="Special terms / notes">
           <input className="input" value={form.special_terms || form.notes || ''} onChange={e => setForm({ ...form, special_terms: e.target.value, notes: e.target.value })} placeholder="Optional" />
@@ -175,16 +187,16 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
 
       <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', margin: '12px 0 6px' }}>Products & sub-items</div>
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
-        Enter <strong>% Markup</strong> to derive customer rate from transfer, or enter <strong>Customer rate ₹</strong> directly (markup recalculates). Sub-items: vendor, transfer, standard markup — roll into parent.
+        <strong>Std markup %</strong> on a sub-item adds extra margin on that sub-item transfer only. Set product to <strong>Optional</strong> when needed.
       </div>
       {mainProducts.map(renderProduct)}
       <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={addProduct}>+ Base product</button>
 
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Additional costs</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Additional costs (charges)</div>
       {charges.map(c => (
         <div key={c.id} style={{ marginBottom: 8, padding: 8, background: '#fefce8', borderRadius: 8 }}>
           <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-            <Badge tone="yellow">{c.charge_kind || 'Charge'}</Badge>
+            <Badge tone="yellow">{typeof c.charge_kind === 'string' && c.charge_kind ? c.charge_kind : 'Charge'}</Badge>
             <select className="input" style={{ width: 130, fontSize: 12 }} value={c.billing || 'on_bill'} onChange={e => setItem(c.id, 'billing', e.target.value)}>
               <option value="on_bill">On bill</option>
               <option value="off_invoice">Off invoice</option>
@@ -207,7 +219,7 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
           </div>
         </div>
       ))}
-      <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={addCharge}>+ Charge</button>
+      <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={() => addCharge('other')}>+ Charge</button>
 
       <div style={{ fontSize: 13, padding: 10, background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 12 }}>
         <strong>Quote totals</strong> · Transfer ₹{xferTot.toLocaleString('en-IN')} · Customer ₹{custTot.toLocaleString('en-IN')} · Margin {mgn.pct}% (₹{Math.round(mgn.amount || 0).toLocaleString('en-IN')})

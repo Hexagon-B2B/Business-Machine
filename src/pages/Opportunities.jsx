@@ -160,7 +160,7 @@ export default function Opportunities({ go }) {
     if (data?.id) await logActivity({ entityType: 'opportunity', entityId: data.id, action: 'create', summary: 'Opportunity created' })
     setShowCreate(false)
     setForm({ ...EMPTY_OPP_FORM })
-    showMsg('Opportunity created — add quote items (base product + sub-items).')
+    showMsg('Opportunity created. First quote saved if product lines were filled.')
     await load()
     if (data?.id) {
       const { data: full } = await supabase.from('opportunities')
@@ -177,7 +177,7 @@ export default function Opportunities({ go }) {
 
   return (
     <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Same form as Company → New opportunity. After create, add quote items (base product + sub-items). Quote total drives pipeline value.">
+      <PageHead eyebrow="Pipeline" title="Opportunities" subtitle="Same form as Company → New opportunity. First quotation (base product + sub-items) on create. Quote total drives pipeline value.">
         <button type="button" className="btn" onClick={() => setView(v => v === 'board' ? 'list' : 'board')}>{view === 'board' ? 'List view' : 'Board view'}</button>
         <button type="button" className="btn primary" onClick={() => { setForm({ ...EMPTY_OPP_FORM }); setShowCreate(true) }}>+ New opportunity</button>
       </PageHead>
@@ -255,7 +255,7 @@ export default function Opportunities({ go }) {
       )}
 
       {showCreate && (
-        <Modal title="New opportunity" onClose={() => setShowCreate(false)} width={560}>
+        <Modal title="New opportunity" onClose={() => setShowCreate(false)} width={720}>
           <form onSubmit={createOpp}>
             <Field label="Company *">
               <CompanySearchSelect companies={companies} value={form.company_id}

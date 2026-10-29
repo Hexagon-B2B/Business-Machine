@@ -320,20 +320,15 @@ export default function Tasks({ go }) {
               {complete.companies?.name && <> · {complete.companies.name}</>}
             </div>
             <Field label="Work done / outcome *">
-              <textarea className="input" rows={4} required
-                value={completeForm.outcome}
-                onChange={e => setCompleteForm({ ...completeForm, outcome: e.target.value })}
-                placeholder="What did you do?" />
+              <textarea className="input" rows={4} required value={completeForm.outcome}
+                onChange={e => setCompleteForm({ ...completeForm, outcome: e.target.value })} placeholder="What did you do?" />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Next due (optional)">
-                <input className="input" type="date" value={completeForm.next_due}
-                  onChange={e => setCompleteForm({ ...completeForm, next_due: e.target.value })} />
+                <input className="input" type="date" value={completeForm.next_due} onChange={e => setCompleteForm({ ...completeForm, next_due: e.target.value })} />
               </Field>
               <Field label="Next task title">
-                <input className="input" value={completeForm.next_title}
-                  onChange={e => setCompleteForm({ ...completeForm, next_title: e.target.value })}
-                  disabled={!completeForm.next_due} />
+                <input className="input" value={completeForm.next_title} onChange={e => setCompleteForm({ ...completeForm, next_title: e.target.value })} disabled={!completeForm.next_due} />
               </Field>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
@@ -348,12 +343,7 @@ export default function Tasks({ go }) {
         <Modal title="New task" onClose={() => setShowCreate(false)} width={520}>
           <form onSubmit={createTask}>
             <Field label="Company *">
-              <CompanySearchSelect
-                companies={companies}
-                value={createForm.company_id}
-                onChange={id => setCreateForm({ ...createForm, company_id: id })}
-                required
-              />
+              <CompanySearchSelect companies={companies} value={createForm.company_id} onChange={id => setCreateForm({ ...createForm, company_id: id })} required />
             </Field>
             <Field label="Title *">
               <input className="input" required value={createForm.title} onChange={e => setCreateForm({ ...createForm, title: e.target.value })} />
@@ -387,7 +377,7 @@ export default function Tasks({ go }) {
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="Priority">
-                <select className="input" value={edit.priority || 'medium'} onChange={e => setEdit({ ...edit, status: e.target.value })}>
+                <select className="input" value={edit.priority || 'medium'} onChange={e => setEdit({ ...edit, priority: e.target.value })}>
                   {TASK_PRIORITY.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>

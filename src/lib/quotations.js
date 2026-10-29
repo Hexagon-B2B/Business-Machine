@@ -76,11 +76,7 @@ export function groupRollup(base, items) {
     customerTotal = Math.round(transferTotal * (1 + marginPct / 100) * 100) / 100
   } else {
     const unitCust = Number(base.customer_price ?? base.unit_price) || 0
-    if (ups.length && unitCust > 0 && qty === 1) {
-      customerTotal = Math.round(unitCust * 100) / 100
-    } else {
-      customerTotal = Math.round(unitCust * qty * 100) / 100
-    }
+    customerTotal = Math.round(unitCust * qty * 100) / 100
     if (transferTotal > 0 && customerTotal > 0) {
       marginPct = Math.round(((customerTotal - transferTotal) / transferTotal) * 1000) / 10
     }
@@ -131,11 +127,11 @@ export function quoteTransferTotal(items) {
 }
 
 export function quoteMargin(items) {
-  const sell = quoteCustomerTotal(items)
-  const cost = quoteTransferTotal(items)
-  const m = Math.round((sell - cost) * 100) / 100
-  const pct = cost > 0 ? Math.round((m / cost) * 1000) / 10 : (sell > 0 ? 100 : 0)
-  return { amount: m, pct }
+  const cust = quoteCustomerTotal(items)
+  const xfer = quoteTransferTotal(items)
+  const amount = Math.round((cust - xfer) * 100) / 100
+  const pct = xfer > 0 ? Math.round((amount / xfer) * 1000) / 10 : 0
+  return { amount, pct }
 }
 
 export function itemsTotal(items) {
@@ -149,36 +145,42 @@ export function formatQuoteForExcel(quote, taxPct = DEFAULT_TAX_PCT) {
   const tax = Number(taxPct) || 0
   const rows = []
   const TAB = String.fromCharCode(9)
-  rows.push(['Item name', 'Customer Rate', 'Qty', 'Tax %', 'Tax Amount', 'Total amount'].join(TAB))
+  rows.push(['SL No', 'Brand', 'Description', 'Rate/Unit/Day', 'Qty', 'Total Tax Value', 'Total (Inclusive Taxes)'].join(TAB))
   let subtotal = 0
+  let sl = 0
   for (const g of groups) {
+    sl += 1
     const qty = g.qty || 1
     const lineTotal = Number(g.customerTotal) || 0
     const rate = qty > 0 ? Math.round((lineTotal / qty) * 100) / 100 : lineTotal
     const taxAmt = Math.round(lineTotal * tax / 100 * 100) / 100
-    const total = Math.round((lineTotal + taxAmt) * 100) / 100
+    const totalInc = Math.round((lineTotal + taxAmt) * 100) / 100
     subtotal += lineTotal
-    rows.push([g.mergedDescription || 'Product', rate, qty, tax, taxAmt, total].join(TAB))
+    const brand = (g.base?.brand || '').trim()
+    const desc = g.mergedDescription || (g.base?.product_name || 'Product')
+    rows.push([sl, brand, desc, rate, qty, taxAmt, totalInc].join(TAB))
   }
   for (const c of charges) {
+    sl += 1
+    const name = c.product_name || c.charge_kind || 'Charge'
     if (c.billing === 'off_invoice') {
-      rows.push([(c.product_name || c.charge_kind || 'Charge') + ' (off invoice)', Number(c.customer_price) || 0, Number(c.quantity) || 1, 0, 0, 0].join(TAB))
+      rows.push([sl, '', name + ' (off invoice)', Number(c.customer_price) || 0, Number(c.quantity) || 1, 0, 0].join(TAB))
       continue
     }
     const qty = Number(c.quantity) || 1
     const rate = Number(c.customer_price) || 0
     const lineTotal = Math.round(qty * rate * 100) / 100
     const taxAmt = Math.round(lineTotal * tax / 100 * 100) / 100
-    const total = Math.round((lineTotal + taxAmt) * 100) / 100
+    const totalInc = Math.round((lineTotal + taxAmt) * 100) / 100
     subtotal += lineTotal
-    rows.push([c.product_name || c.charge_kind || 'Charge', rate, qty, tax, taxAmt, total].join(TAB))
+    rows.push([sl, (c.brand || '').trim(), name, rate, qty, taxAmt, totalInc].join(TAB))
   }
   const taxTotal = Math.round(subtotal * tax / 100 * 100) / 100
   const grand = Math.round((subtotal + taxTotal) * 100) / 100
-  rows.push(['', '', '', '', '', ''].join(TAB))
-  rows.push(['Subtotal (ex-tax)', '', '', '', '', subtotal].join(TAB))
-  rows.push(['Tax (' + tax + '%)', '', '', '', '', taxTotal].join(TAB))
-  rows.push(['Grand total', '', '', '', '', grand].join(TAB))
+  rows.push(['', '', '', '', '', '', ''].join(TAB))
+  rows.push(['', '', 'Subtotal (ex-tax)', '', '', '', subtotal].join(TAB))
+  rows.push(['', '', 'Tax (' + tax + '%)', '', '', '', taxTotal].join(TAB))
+  rows.push(['', '', 'Grand total (incl. tax)', '', '', '', grand].join(TAB))
   const header = 'Quotation' + TAB + (quote?.quotation_no || '') + TAB + 'Version' + TAB + 'V' + (quote?.version || 1) + '\nStatus' + TAB + (quote?.status || '') + TAB + 'Currency' + TAB + (quote?.currency || 'INR') + '\n'
   return header + '\n' + rows.join('\n')
 }
@@ -253,22 +255,32 @@ export async function saveQuotation(opts) {
   const margin = quoteMargin(items)
   const groups = quoteGroups(items)
   const id = 'q_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-  const version = opts.version || 1
-  const quotation_no = opts.quotation_no || (opts.supersedePreviousId ? (quotes.find(q => q.id === opts.supersedePreviousId)?.quotation_no || nextQuoteNo(quotes)) : nextQuoteNo(quotes))
+  const prev = quotes.filter(q => q.status !== 'superseded')
+  const version = opts.supersedePreviousId
+    ? (Number((quotes.find(q => q.id === opts.supersedePreviousId) || {}).version) || 1) + 1
+    : 1
+  const quotation_no = opts.supersedePreviousId
+    ? (quotes.find(q => q.id === opts.supersedePreviousId) || {}).quotation_no || nextQuoteNo(quotes)
+    : nextQuoteNo(quotes)
   const idMap = {}
-  items.forEach((it, i) => {
-    const newId = String(it.id || '').startsWith('tmp_') ? id + '_i' + i : it.id
-    idMap[it.id] = newId
-  })
+  items.forEach(it => { idMap[it.id] = it.id.startsWith('tmp_') ? 'li_' + Math.random().toString(36).slice(2, 10) : it.id })
   const rowItems = items.filter(it => (it.product_name || '').trim() || it.line_type === 'charge').map((it, i) => ({
-    ...it,
     id: idMap[it.id] || it.id,
     parent_id: it.parent_id && idMap[it.parent_id] ? idMap[it.parent_id] : it.parent_id,
+    line_type: it.line_type || 'product',
+    product_name: it.product_name || '',
+    specification: it.specification || '',
+    brand: it.brand || '',
+    model_part_no: it.model_part_no || '',
+    vendor: it.vendor || '',
     quantity: Number(it.quantity) || 1,
     transfer_price: it.transfer_price !== '' && it.transfer_price != null ? Number(it.transfer_price) : null,
     customer_price: it.customer_price !== '' && it.customer_price != null ? Number(it.customer_price) : null,
     margin_pct: it.margin_pct !== '' && it.margin_pct != null ? Number(it.margin_pct) : null,
     min_margin_pct: it.min_margin_pct !== '' && it.min_margin_pct != null ? Number(it.min_margin_pct) : null,
+    billing: it.billing || 'on_bill',
+    charge_kind: it.charge_kind || '',
+    notes: it.notes || '',
     sort_order: i,
   }))
   const quote = {

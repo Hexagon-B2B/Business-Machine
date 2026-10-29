@@ -181,8 +181,13 @@ export function formatQuoteForExcel(quote, taxPct = DEFAULT_TAX_PCT) {
   rows.push(['', '', 'Subtotal (ex-tax)', '', '', '', subtotal].join(TAB))
   rows.push(['', '', 'Tax (' + tax + '%)', '', '', '', taxTotal].join(TAB))
   rows.push(['', '', 'Grand total (incl. tax)', '', '', '', grand].join(TAB))
-  const header = 'Quotation' + TAB + (quote?.quotation_no || '') + TAB + 'Version' + TAB + 'V' + (quote?.version || 1) + '\nStatus' + TAB + (quote?.status || '') + TAB + 'Currency' + TAB + (quote?.currency || 'INR') + '\n'
-  return header + '\n' + rows.join('\n')
+  const headerLines = [
+    ['Quotation', quote?.quotation_no || '', 'Version', 'V' + (quote?.version || 1)].join(TAB),
+    ['Validity', quote?.validity_date || '', 'Delivery TAT', quote?.delivery_tat || ''].join(TAB),
+    ['Status', quote?.status || '', 'Currency', quote?.currency || 'INR'].join(TAB),
+    ['Payment', quote?.payment_terms || '', 'Transport', quote?.transport_terms || ''].join(TAB),
+  ]
+  return headerLines.join('\n') + '\n\n' + rows.join('\n')
 }
 
 function isMissingTable(err) {
@@ -255,7 +260,6 @@ export async function saveQuotation(opts) {
   const margin = quoteMargin(items)
   const groups = quoteGroups(items)
   const id = 'q_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-  const prev = quotes.filter(q => q.status !== 'superseded')
   const version = opts.supersedePreviousId
     ? (Number((quotes.find(q => q.id === opts.supersedePreviousId) || {}).version) || 1) + 1
     : 1

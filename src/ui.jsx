@@ -1,3 +1,4 @@
+import { supabase } from './supabase'
 import { useState, useEffect, useRef } from 'react'
 
 export function PageHead({ eyebrow, title, subtitle, children }) {
@@ -126,10 +127,13 @@ export function Badge({ children, tone = 'gray' }) {
   return <span className={`badge ${tone}`}>{children}</span>
 }
 
-/** Searchable company picker — type to filter instead of scrolling a long select. */
-export function CompanySearchSelect({ companies = [], value, onChange, required, placeholder = 'Type to search company…' }) {
+/** Searchable company picker — queries Supabase live (name, legal name, city). */
+export function CompanySearchSelect({ companies: companiesProp, value, onChange, required, placeholder = 'Type to search company…' }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [selectedLabel, setSelectedLabel] = useState('')
   const wrapRef = useRef(null)
 
   useEffect(() => {
@@ -140,35 +144,90 @@ export function CompanySearchSelect({ companies = [], value, onChange, required,
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  const selected = companies.find(c => c.id === value)
-  const term = q.trim().toLowerCase()
-  const filtered = (() => {
-    const list = !term
-      ? companies
-      : companies.filter(c => (c.name || '').toLowerCase().includes(term) || (c.city || '').toLowerCase().includes(term))
-    return list.slice(0, 100)
-  })()
+  useEffect(() => {
+    if (!value) { setSelectedLabel(''); return }
+    const fromProp = (companiesProp || []).find(c => c.id === value)
+    if (fromProp) { setSelectedLabel(fromProp.name || ''); return }
+    let cancelled = false
+    supabase.from('companies').select('id, name').eq('id', value).maybeSingle()
+      .then(({ data }) => { if (!cancelled && data) setSelectedLabel(data.name || '') })
+    return () => { cancelled = true }
+  }, [value, companiesProp])
 
-  function pick(id) {
-    onChange(id)
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      setLoading(true)
+      const term = q.trim().replace(/%/g, '').replace(/,/g, ' ')
+      let query = supabase
+        .from('companies')
+        .select('id, name, legal_name, city')
+        .order('name')
+        .limit(60)
+      query = query.not('state', 'eq', 'deleted')
+      if (term) {
+        query = query.or(
+          `name.ilike.%${term}%,legal_name.ilike.%${term}%,city.ilike.%${term}%`
+        )
+      }
+      let { data, error } = await query
+      if (error) {
+        let q2 = supabase.from('companies').select('id, name, legal_name, city').order('name').limit(60)
+        if (term) q2 = q2.or(`name.ilike.%${term}%,legal_name.ilike.%${term}%,city.ilike.%${term}%`)
+        ;({ data, error } = await q2)
+      }
+      if (!error && term && (!data || data.length === 0)) {
+        const token = term.split(/\s+/).filter(t => t.length >= 3)[0]
+        if (token) {
+          let q3 = supabase.from('companies').select('id, name, legal_name, city').order('name').limit(60)
+          q3 = q3.or(`name.ilike.%${token}%,legal_name.ilike.%${token}%,city.ilike.%${token}%`)
+          const r3 = await q3
+          if (!r3.error && r3.data) data = r3.data
+        }
+      }
+      if (companiesProp?.length && term) {
+        const t = term.toLowerCase()
+        const local = companiesProp.filter(c =>
+          (c.name || '').toLowerCase().includes(t) ||
+          (c.legal_name || '').toLowerCase().includes(t) ||
+          (c.city || '').toLowerCase().includes(t)
+        )
+        const seen = new Set((data || []).map(c => c.id))
+        for (const c of local) {
+          if (!seen.has(c.id)) { (data = data || []).push(c); seen.add(c.id) }
+        }
+      }
+      if (!cancelled) {
+        setResults(data || [])
+        setLoading(false)
+      }
+    }, 200)
+    return () => { cancelled = true; clearTimeout(handle) }
+  }, [q, open, companiesProp])
+
+  function pick(c) {
+    onChange(c.id)
+    setSelectedLabel(c.name || '')
     setQ('')
     setOpen(false)
   }
 
   function clear() {
     onChange('')
+    setSelectedLabel('')
     setQ('')
     setOpen(true)
   }
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
-      {selected && !open ? (
+      {value && selectedLabel && !open ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="input" style={{ flex: 1, display: 'flex', alignItems: 'center', minHeight: 44, cursor: 'pointer' }} onClick={() => setOpen(true)}>
-            <span style={{ fontWeight: 600 }}>{selected.name}</span>
+            <span style={{ fontWeight: 600 }}>{selectedLabel}</span>
           </div>
-          <button type="button" className="btn" style={{ flexShrink: 0 }} onClick={clear}>Change</button>
+          <button type="button" className="btn" style={{ flexShrink: 0, minHeight: 44 }} onClick={clear}>Change</button>
         </div>
       ) : (
         <input
@@ -183,17 +242,21 @@ export function CompanySearchSelect({ companies = [], value, onChange, required,
       )}
       {open && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 60,
+          position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 80,
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-          maxHeight: 240, overflowY: 'auto', boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+          maxHeight: 280, overflowY: 'auto', boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
         }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: 12, fontSize: 13, color: '#64748b' }}>No companies match “{q.trim()}”</div>
-          ) : filtered.map(c => (
+          {loading ? (
+            <div style={{ padding: 12, fontSize: 13, color: '#64748b' }}>Searching…</div>
+          ) : results.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 13, color: '#64748b' }}>
+              {q.trim() ? `No companies match “${q.trim()}” — try fewer letters` : 'Start typing a company name'}
+            </div>
+          ) : results.map(c => (
             <button
               key={c.id}
               type="button"
-              onClick={() => pick(c.id)}
+              onClick={() => pick(c)}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px',
                 border: 0, borderBottom: '1px solid #f1f5f9', background: c.id === value ? '#eff6ff' : '#fff',
@@ -201,12 +264,12 @@ export function CompanySearchSelect({ companies = [], value, onChange, required,
               }}
             >
               <span style={{ fontWeight: 600 }}>{c.name}</span>
-              {c.city ? <span style={{ color: '#64748b', marginLeft: 8, fontSize: 12 }}>{c.city}</span> : null}
+              {c.legal_name && c.legal_name !== c.name ? (
+                <span style={{ color: '#64748b', marginLeft: 8, fontSize: 12 }}>{c.legal_name}</span>
+              ) : null}
+              {c.city ? <span style={{ color: '#94a3b8', marginLeft: 8, fontSize: 12 }}>{c.city}</span> : null}
             </button>
           ))}
-          {companies.length > 100 && !term && (
-            <div style={{ padding: 8, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>Type to narrow {companies.length.toLocaleString()} companies</div>
-          )}
         </div>
       )}
       <input type="hidden" value={value || ''} required={required} readOnly />

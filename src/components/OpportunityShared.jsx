@@ -119,10 +119,11 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>1. Deal details · 2. Quotations (Copy for Excel includes validity + delivery TAT)</div>
       </div>
       <form onSubmit={saveDeal}>
-        <Field label="Name">
-          <input className="input" value={row.name || ''} readOnly disabled
-            title="Opportunity name cannot be changed after create"
-            style={{ background: '#f1f5f9', color: '#334155', cursor: 'not-allowed' }} />
+        <Field label="Name (fixed after create)">
+          <div className="input" style={{ background: '#f1f5f9', color: '#334155', cursor: 'default', minHeight: 38, display: 'flex', alignItems: 'center' }}
+            title="Opportunity name cannot be changed after create">
+            {row.name || '—'}
+          </div>
         </Field>
         <Field label="Requirement"><textarea className="input" rows={2} value={row.requirement_description || ''} onChange={e => setRow({ ...row, requirement_description: e.target.value })} /></Field>
         <Field label="Solution"><textarea className="input" rows={2} value={row.solution || ''} onChange={e => setRow({ ...row, solution: e.target.value })} /></Field>
@@ -175,6 +176,16 @@ export async function createOppWithOptionalTask(form, companyId) {
       description: 'From opportunity: ' + (payload.name || ''),
       due_at: form.next_action_due, priority: 'medium', status: 'open', source: 'user', state: 'active',
     })
+  }
+  const items = Array.isArray(form.quote_items) ? form.quote_items : []
+  const hasLines = items.some(it => (it.product_name || '').trim() || (it.line_type === 'charge' && (Number(it.customer_price) || 0) > 0))
+  if (hasLines && data?.id) {
+    const { error: qErr } = await saveQuotation({
+      opportunityId: data.id, companyId, items, status: 'draft',
+      validity_date: form.validity_date || null, delivery_tat: form.delivery_tat || null,
+      payment_terms: form.payment_terms || null, transport_terms: form.transport_terms || null,
+    })
+    if (qErr) console.warn('First quote save:', qErr.message)
   }
   return { data, error: null }
 }

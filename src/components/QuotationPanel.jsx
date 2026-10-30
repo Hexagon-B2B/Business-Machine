@@ -132,15 +132,27 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
   }
 
   function setItem(id, key, val) {
-    setForm(f => ({
-      ...f,
-      items: f.items.map(it => {
+    setForm(f => {
+      let items = f.items.map(it => {
         if (it.id !== id) return it
         const next = { ...it, [key]: val }
         if (it.line_type === 'upgrade' && key === 'margin_pct') next.min_margin_pct = val
         return next
-      }),
-    }))
+      })
+      // When min mgn % or transfer/qty changes on a base product, recalculate customer unit rate
+      const changed = items.find(it => it.id === id)
+      if (changed && (changed.line_type || 'product') === 'product' &&
+          (key === 'min_margin_pct' || key === 'transfer_price' || key === 'quantity')) {
+        const g = groupRollup(changed, items)
+        if (g.transferTotal > 0 && g.customerTotal > 0) {
+          const unit = g.qty > 0 ? Math.round((g.customerTotal / g.qty) * 100) / 100 : g.customerTotal
+          items = items.map(it => it.id === id
+            ? { ...it, customer_price: unit, margin_pct: it.margin_pct !== '' && it.margin_pct != null ? it.margin_pct : (g.marginPct ?? '') }
+            : it)
+        }
+      }
+      return { ...f, items }
+    })
   }
 
   function applyGroupMargin(baseId, marginPct) {
@@ -148,11 +160,15 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       const items = f.items.map(it => it.id === baseId ? { ...it, margin_pct: marginPct } : it)
       const base = items.find(i => i.id === baseId)
       if (!base) return f
-      const g = groupRollup(base, items)
-      const cust = g.transferTotal > 0 && marginPct !== ''
-        ? Math.round(g.transferTotal * (1 + Number(marginPct) / 100) * 100) / 100 + (g.upgradeStdExtra || 0)
-        : base.customer_price
-      return { ...f, items: items.map(it => it.id === baseId ? { ...it, margin_pct: marginPct, customer_price: cust } : it) }
+      const g = groupRollup({ ...base, margin_pct: marginPct }, items)
+      const qty = Number(base.quantity) || 1
+      // customer_price is unit rate
+      const unit = g.customerTotal > 0 && qty > 0
+        ? Math.round((g.customerTotal / qty) * 100) / 100
+        : (marginPct !== '' && g.transferTotal > 0
+          ? Math.round((g.transferTotal * (1 + Number(marginPct) / 100) / qty) * 100) / 100
+          : base.customer_price)
+      return { ...f, items: items.map(it => it.id === baseId ? { ...it, margin_pct: marginPct, customer_price: unit } : it) }
     })
   }
 
@@ -160,14 +176,23 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     setForm(f => {
       const base = f.items.find(i => i.id === baseId)
       if (!base) return f
-      const g = groupRollup(base, f.items)
-      const qty = Number(base.quantity) || 1
-      const total = (Number(unitRate) || 0) * qty
-      let marginPct = ''
-      if (g.transferTotal > 0 && total > 0) {
-        marginPct = Math.round(((total - g.transferTotal) / g.transferTotal) * 1000) / 10
+      // Clear markup so min floor / entered rate drive the total
+      const items = f.items.map(it => it.id === baseId
+        ? { ...it, customer_price: unitRate, margin_pct: '' }
+        : it)
+      const updated = items.find(i => i.id === baseId)
+      const g = groupRollup(updated, items)
+      // If min mgn lifts the rate, reflect that in the field
+      const qty = Number(updated.quantity) || 1
+      const unit = g.customerTotal > 0 && qty > 0
+        ? Math.round((g.customerTotal / qty) * 100) / 100
+        : unitRate
+      return {
+        ...f,
+        items: items.map(it => it.id === baseId
+          ? { ...it, customer_price: unit, margin_pct: g.marginPct != null ? g.marginPct : '' }
+          : it),
       }
-      return { ...f, items: f.items.map(it => it.id === baseId ? { ...it, customer_price: unitRate, margin_pct: marginPct } : it) }
     })
   }
 

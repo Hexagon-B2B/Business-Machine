@@ -79,7 +79,7 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
             <Badge tone="gray">Base product</Badge>
             {g.upgrades.length > 0 && <Badge tone="blue">{g.upgrades.length} sub-item(s)</Badge>}
-            {(prod.optionality === 'optional') && <Badge tone="yellow">Optional</Badge>}
+            {g.isOptional && <Badge tone="yellow">Optional</Badge>}
             {g.belowMin && <Badge tone="red">Below min {g.minMarginPct}%</Badge>}
             <button type="button" className="btn" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => removeItem(prod.id)}>×</button>
           </div>
@@ -126,7 +126,10 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
             </div>
             <div>
               <MiniLabel>Min mgn %</MiniLabel>
-              <input className="input" type="number" value={prod.min_margin_pct ?? ''} onChange={e => setItem(prod.id, 'min_margin_pct', e.target.value)} />
+              <input className="input" type="number" value={prod.min_margin_pct ?? ''}
+                onChange={e => setItem(prod.id, 'min_margin_pct', e.target.value)}
+                placeholder="e.g. 20"
+                title="Min margin % on transfer — sets customer rate = TP × (1 + min%) when % Markup is empty; always acts as a floor" />
             </div>
           </div>
           <div style={{ marginTop: 8, padding: 8, background: '#f8fafc', borderRadius: 6, fontSize: 12 }}>
@@ -135,8 +138,10 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
             <div style={{ color: '#475569' }}>
               TP ₹{g.transferTotal.toLocaleString('en-IN')} → Cust ₹{g.customerTotal.toLocaleString('en-IN')}
               {' · '}Rate ₹{unitRate.toLocaleString('en-IN')}
-              {' · '}Markup {g.marginPct}%
+              {' · '}Markup {g.marginPct != null ? g.marginPct : 0}%
               {' · '}Profit ₹{profit.toLocaleString('en-IN')}
+              {g.minMarginPct != null && <span style={{ color: '#1d4ed8' }}> · Min {g.minMarginPct}% applied</span>}
+              {g.upgradeStdExtra > 0 && <span style={{ color: '#065f46' }}> · +₹{g.upgradeStdExtra.toLocaleString('en-IN')} from sub-item std markup</span>}
             </div>
           </div>
           <button type="button" className="btn" style={{ fontSize: 11, padding: '2px 8px', marginTop: 6 }} onClick={() => addUpgrade(prod.id)}>+ Sub-item / upgrade</button>
@@ -187,7 +192,7 @@ export function QuoteEditor({ form, setForm, mode, baseQuote, saving, onSave, on
 
       <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', margin: '12px 0 6px' }}>Products & sub-items</div>
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
-        <strong>Std markup %</strong> on a sub-item adds extra margin on that sub-item transfer only. Set product to <strong>Optional</strong> when needed.
+        <strong>Std markup %</strong> on a sub-item adds extra margin on that sub-item’s transfer only (package stays sellable). Set product to <strong>Optional</strong> only when needed — Excel lists optional items separately.
       </div>
       {mainProducts.map(renderProduct)}
       <button type="button" className="btn" style={{ marginBottom: 12 }} onClick={addProduct}>+ Base product</button>

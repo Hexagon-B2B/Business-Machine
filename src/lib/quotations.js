@@ -73,7 +73,7 @@ export function groupRollup(base, items) {
       : parts[0]
   const qty = Number(base.quantity) || 1
 
-  // Min margin floor from base product + any sub-item floors
+  // Min margin from base product (and any sub-item floors)
   const minFloors = []
   if (base.min_margin_pct !== '' && base.min_margin_pct != null) {
     const m = Number(base.min_margin_pct)
@@ -85,28 +85,39 @@ export function groupRollup(base, items) {
   }
   const minMarginPct = minFloors.length ? Math.max(...minFloors) : null
 
+  // Explicit % Markup on base product
   let marginPct = base.margin_pct !== '' && base.margin_pct != null ? Number(base.margin_pct) : null
   if (marginPct != null && Number.isNaN(marginPct)) marginPct = null
 
-  let customerTotal
+  // Customer unit rate entered by user (if any)
+  const hasCustomerRate =
+    base.customer_price !== '' && base.customer_price != null && !Number.isNaN(Number(base.customer_price))
+  const unitCustEntered = hasCustomerRate ? Number(base.customer_price) : null
+
+  // Priority for base product customer total:
+  // 1. % Markup entered → TP × (1 + markup%)
+  // 2. Min mgn % entered (and no markup) → TP × (1 + min%)
+  // 3. Customer rate entered → unit × qty
+  // 4. else 0
+  // Then always enforce Min mgn % as a floor on the result.
+  let customerTotal = 0
   if (marginPct != null && transferTotal > 0) {
     customerTotal = Math.round(transferTotal * (1 + marginPct / 100) * 100) / 100
-  } else if (
-    (base.customer_price === '' || base.customer_price == null) &&
-    minMarginPct != null &&
-    transferTotal > 0
-  ) {
-    // No markup and no customer rate — use Min mgn % for the calculation
+  } else if (minMarginPct != null && transferTotal > 0 && !hasCustomerRate) {
+    // Min mgn % drives the calculation from transfer price
     customerTotal = Math.round(transferTotal * (1 + minMarginPct / 100) * 100) / 100
     marginPct = minMarginPct
-  } else {
-    const unitCust = Number(base.customer_price ?? base.unit_price) || 0
-    customerTotal = Math.round(unitCust * qty * 100) / 100
+  } else if (hasCustomerRate) {
+    customerTotal = Math.round((unitCustEntered || 0) * qty * 100) / 100
     if (transferTotal > 0 && customerTotal > 0) {
       marginPct = Math.round(((customerTotal - transferTotal) / transferTotal) * 1000) / 10
     }
+  } else if (minMarginPct != null && transferTotal > 0) {
+    customerTotal = Math.round(transferTotal * (1 + minMarginPct / 100) * 100) / 100
+    marginPct = minMarginPct
   }
 
+  // Extra margin from sub-item std markup % (on that sub-item TP only)
   let upgradeStdExtra = 0
   for (const u of ups) {
     const pct = u.margin_pct !== '' && u.margin_pct != null ? Number(u.margin_pct) : null
@@ -117,7 +128,7 @@ export function groupRollup(base, items) {
   upgradeStdExtra = Math.round(upgradeStdExtra * 100) / 100
   customerTotal = Math.round((customerTotal + upgradeStdExtra) * 100) / 100
 
-  // Enforce Min mgn % floor: lift customer total if effective margin is below min
+  // Min mgn % floor — always lift customer total up to TP × (1 + min%) + sub extras
   if (minMarginPct != null && transferTotal > 0) {
     const floorTotal = Math.round(transferTotal * (1 + minMarginPct / 100) * 100) / 100 + upgradeStdExtra
     if (customerTotal < floorTotal) {

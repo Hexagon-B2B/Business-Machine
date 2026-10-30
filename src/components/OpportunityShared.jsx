@@ -114,17 +114,17 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
   return (
     <div>
       {flash && <div className="notice" style={{ marginBottom: 10 }}>{flash}</div>}
-      <div style={{ marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-        <strong>{row.companies?.name || 'Company'}</strong> · {row.name || 'Opportunity'}
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>1. Deal details · 2. Quotations (Copy for Excel includes validity + delivery TAT)</div>
+      <div style={{ marginBottom: 14, padding: '14px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>
+          {row.name || 'Opportunity'}
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+          {row.companies?.name || 'Company'}
+          <span style={{ margin: '0 6px', color: '#cbd5e1' }}>·</span>
+          1. Deal details · 2. Quotations
+        </div>
       </div>
       <form onSubmit={saveDeal}>
-        <Field label="Name (fixed after create)">
-          <div className="input" style={{ background: '#f1f5f9', color: '#334155', cursor: 'default', minHeight: 38, display: 'flex', alignItems: 'center' }}
-            title="Opportunity name cannot be changed after create">
-            {row.name || '—'}
-          </div>
-        </Field>
         <Field label="Requirement"><textarea className="input" rows={2} value={row.requirement_description || ''} onChange={e => setRow({ ...row, requirement_description: e.target.value })} /></Field>
         <Field label="Solution"><textarea className="input" rows={2} value={row.solution || ''} onChange={e => setRow({ ...row, solution: e.target.value })} /></Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

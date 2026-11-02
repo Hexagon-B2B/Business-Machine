@@ -114,11 +114,28 @@ export default function CompanyDetail({ id, go }) {
 
   function openEdit() {
     setEForm({
-      name: company.name || '', legal_name: company.legal_name || '', address: company.address || '',
-      city: company.city || '', pincode: company.pincode || '', hq_location: company.hq_location || '',
-      country: company.country || '', employee_count: company.employee_count || '', board_no: company.board_no || '',
-      website: company.website || '', email: company.email || '', gst_no: company.gst_no || '',
-      industry: company.industry || '', notes: company.notes || '',
+      name: company.name || '',
+      legal_name: company.legal_name || '',
+      address: company.address || '',
+      city: company.city || '',
+      pincode: company.pincode || '',
+      hq_location: company.hq_location || '',
+      country: company.country || '',
+      employee_count: company.employee_count || company.enrichment_employee_count || '',
+      board_no: company.board_no || '',
+      website: company.website || '',
+      email: company.email || '',
+      gst_no: company.gst_no || '',
+      industry: company.industry || '',
+      notes: company.notes || '',
+      locations: Array.isArray(company.metadata?.locations)
+        ? company.metadata.locations.map(l => ({
+            label: l.label || '',
+            address: l.address || '',
+            city: l.city || '',
+            pincode: l.pincode || '',
+          }))
+        : [],
     })
     setShowEdit(true)
   }
@@ -126,16 +143,38 @@ export default function CompanyDetail({ id, go }) {
   async function saveCompany(e) {
     e.preventDefault()
     if (!eForm.name?.trim()) return
+    const gst = (eForm.gst_no || '').trim().toUpperCase()
+    if (gst && !/^[0-9A-Z]{15}$/.test(gst)) {
+      alert('GST No should be 15 characters. Leave blank if unknown.')
+      return
+    }
     setSaving(true)
     const payload = {
-      name: eForm.name.trim(), legal_name: (eForm.legal_name || '').trim() || null,
-      address: (eForm.address || '').trim() || null, city: (eForm.city || '').trim() || null,
-      pincode: (eForm.pincode || '').trim() || null, hq_location: (eForm.hq_location || '').trim() || null,
+      name: eForm.name.trim(),
+      legal_name: (eForm.legal_name || '').trim() || null,
+      address: (eForm.address || '').trim() || null,
+      city: (eForm.city || '').trim() || null,
+      pincode: (eForm.pincode || '').trim() || null,
+      hq_location: (eForm.hq_location || '').trim() || null,
       country: (eForm.country || '').trim() || null,
       employee_count: eForm.employee_count !== '' && eForm.employee_count != null ? Number(eForm.employee_count) : null,
-      board_no: (eForm.board_no || '').trim() || null, website: (eForm.website || '').trim() || null,
-      email: (eForm.email || '').trim() || null, gst_no: (eForm.gst_no || '').trim() || null,
-      industry: (eForm.industry || '').trim() || null, notes: (eForm.notes || '').trim() || null,
+      board_no: (eForm.board_no || '').trim() || null,
+      website: (eForm.website || '').trim() || null,
+      email: (eForm.email || '').trim() || null,
+      gst_no: gst || null,
+      industry: (eForm.industry || '').trim() || null,
+      notes: (eForm.notes || '').trim() || null,
+      metadata: {
+        ...(company.metadata || {}),
+        locations: (eForm.locations || [])
+          .filter(l => (l.city || l.label || l.address || l.pincode || '').trim())
+          .map(l => ({
+            label: (l.label || '').trim(),
+            address: (l.address || '').trim(),
+            city: (l.city || '').trim(),
+            pincode: (l.pincode || '').trim(),
+          })),
+      },
     }
     let { error } = await supabase.from('companies').update(payload).eq('id', id)
     if (error && /pincode|column/i.test(error.message)) {
@@ -143,8 +182,10 @@ export default function CompanyDetail({ id, go }) {
       ;({ error } = await supabase.from('companies').update(payload).eq('id', id))
     }
     setSaving(false)
-    if (!error) { setShowEdit(false); setCompany({ ...company, ...payload }) }
-    else alert(error.message)
+    if (!error) {
+      setShowEdit(false)
+      setCompany({ ...company, ...payload })
+    } else alert(error.message)
   }
 
   async function saveContact(e) {
@@ -271,9 +312,20 @@ export default function CompanyDetail({ id, go }) {
 
       {tab === 'overview' && (
         <div className="card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>Notes</div>
+          <h2 style={{ fontSize: 15, marginBottom: 8 }}>Primary address</h2>
+          <p style={{ fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap' }}>{company.address || '—'}</p>
+          {Array.isArray(company.metadata?.locations) && company.metadata.locations.length > 0 && (
+            <>
+              <h2 style={{ fontSize: 15, margin: '16px 0 8px' }}>Other locations</h2>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                {company.metadata.locations.map((l, i) => (
+                  <li key={i}>{[l.label, l.address, l.city, l.pincode].filter(Boolean).join(' · ') || '—'}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          <div style={{ marginTop: 16, fontSize: 13, color: '#64748b' }}>Notes</div>
           <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{company.notes || '—'}</div>
-          <div style={{ marginTop: 16, fontSize: 13, color: '#64748b' }}>Open the Opportunities tab to view deals. Clicking a company always opens this company page (Overview), not an opportunity.</div>
         </div>
       )}
 
@@ -410,24 +462,87 @@ export default function CompanyDetail({ id, go }) {
       )}
 
       {showEdit && (
-        <Modal title="Edit company" onClose={() => setShowEdit(false)} width={640}>
+        <Modal title="Edit Company" onClose={() => setShowEdit(false)} width={720}>
           <form onSubmit={saveCompany}>
-            <Field label="Name *"><input className="input" required value={eForm.name || ''} onChange={e => setEForm({ ...eForm, name: e.target.value })} /></Field>
-            <Field label="Legal name"><input className="input" value={eForm.legal_name || ''} onChange={e => setEForm({ ...eForm, legal_name: e.target.value })} /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="City"><input className="input" value={eForm.city || ''} onChange={e => setEForm({ ...eForm, city: e.target.value })} /></Field>
-              <Field label="Pincode"><input className="input" value={eForm.pincode || ''} onChange={e => setEForm({ ...eForm, pincode: e.target.value })} /></Field>
+              <Field label="Short name *">
+                <input className="input" required value={eForm.name || ''} onChange={e => setEForm({ ...eForm, name: e.target.value })} />
+              </Field>
+              <Field label="Full / legal name">
+                <input className="input" value={eForm.legal_name || ''} onChange={e => setEForm({ ...eForm, legal_name: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Primary address">
+              <textarea className="input" rows={2} value={eForm.address || ''} onChange={e => setEForm({ ...eForm, address: e.target.value })} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="City">
+                <input className="input" value={eForm.city || ''} onChange={e => setEForm({ ...eForm, city: e.target.value })} />
+              </Field>
+              <Field label="Pincode">
+                <input className="input" value={eForm.pincode || ''} onChange={e => setEForm({ ...eForm, pincode: e.target.value })} placeholder="e.g. 560001" />
+              </Field>
+              <Field label="Country">
+                <input className="input" value={eForm.country || ''} onChange={e => setEForm({ ...eForm, country: e.target.value })} />
+              </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Website"><input className="input" value={eForm.website || ''} onChange={e => setEForm({ ...eForm, website: e.target.value })} /></Field>
-              <Field label="Email"><input className="input" type="email" value={eForm.email || ''} onChange={e => setEForm({ ...eForm, email: e.target.value })} /></Field>
+              <Field label="HQ">
+                <input className="input" value={eForm.hq_location || ''} onChange={e => setEForm({ ...eForm, hq_location: e.target.value })} />
+              </Field>
+              <Field label="Board Tele No">
+                <input className="input" value={eForm.board_no || ''} onChange={e => setEForm({ ...eForm, board_no: e.target.value })} />
+              </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="GST No"><input className="input" value={eForm.gst_no || ''} onChange={e => setEForm({ ...eForm, gst_no: e.target.value })} /></Field>
-              <Field label="Board Tele No"><input className="input" value={eForm.board_no || ''} onChange={e => setEForm({ ...eForm, board_no: e.target.value })} /></Field>
+              <Field label="Employees">
+                <input className="input" type="number" value={eForm.employee_count || ''} onChange={e => setEForm({ ...eForm, employee_count: e.target.value })} />
+              </Field>
+              <Field label="GST">
+                <input className="input" value={eForm.gst_no || ''} onChange={e => setEForm({ ...eForm, gst_no: e.target.value })} placeholder="15-char GSTIN" />
+              </Field>
             </div>
-            <Field label="Industry"><input className="input" value={eForm.industry || ''} onChange={e => setEForm({ ...eForm, industry: e.target.value })} /></Field>
-            <Field label="Notes"><textarea className="input" rows={2} value={eForm.notes || ''} onChange={e => setEForm({ ...eForm, notes: e.target.value })} /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Website">
+                <input className="input" value={eForm.website || ''} onChange={e => setEForm({ ...eForm, website: e.target.value })} placeholder="https://" />
+              </Field>
+              <Field label="Email">
+                <input className="input" type="email" value={eForm.email || ''} onChange={e => setEForm({ ...eForm, email: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Industry">
+              <input className="input" value={eForm.industry || ''} onChange={e => setEForm({ ...eForm, industry: e.target.value })} />
+            </Field>
+            <Field label="Notes">
+              <textarea className="input" rows={2} value={eForm.notes || ''} onChange={e => setEForm({ ...eForm, notes: e.target.value })} />
+            </Field>
+            <div style={{ margin: '8px 0', padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Additional locations (service area)</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Sites beyond the primary address.</div>
+              {(eForm.locations || []).map((loc, idx) => (
+                <div key={idx} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: '#334155' }}>Location {idx + 1}</div>
+                    <button type="button" className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEForm({ ...eForm, locations: (eForm.locations || []).filter((_, i) => i !== idx) })}>Remove</button>
+                  </div>
+                  <Field label="Site / label (optional)">
+                    <input className="input" value={loc.label || ''} placeholder="e.g. Plant 2" onChange={e => { const locations = [...(eForm.locations || [])]; locations[idx] = { ...locations[idx], label: e.target.value }; setEForm({ ...eForm, locations }) }} />
+                  </Field>
+                  <Field label="Address">
+                    <textarea className="input" rows={2} value={loc.address || ''} onChange={e => { const locations = [...(eForm.locations || [])]; locations[idx] = { ...locations[idx], address: e.target.value }; setEForm({ ...eForm, locations }) }} />
+                  </Field>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <Field label="City">
+                      <input className="input" value={loc.city || ''} onChange={e => { const locations = [...(eForm.locations || [])]; locations[idx] = { ...locations[idx], city: e.target.value }; setEForm({ ...eForm, locations }) }} />
+                    </Field>
+                    <Field label="Pincode">
+                      <input className="input" value={loc.pincode || ''} onChange={e => { const locations = [...(eForm.locations || [])]; locations[idx] = { ...locations[idx], pincode: e.target.value }; setEForm({ ...eForm, locations }) }} />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setEForm({ ...eForm, locations: [...(eForm.locations || []), { label: '', address: '', city: '', pincode: '' }] })}>+ Add location</button>
+            </div>
             <Actions saving={saving} onCancel={() => setShowEdit(false)} label="Save company" />
           </form>
         </Modal>

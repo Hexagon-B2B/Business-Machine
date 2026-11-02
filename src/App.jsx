@@ -121,7 +121,15 @@ export default function App() {
       <main className="app-main">
         {page === 'dashboard' && <Dashboard go={go} />}
         {page === 'companies' && <Companies go={go} />}
-        {page === 'company' && <CompanyDetail id={selectedCompanyId} go={go} />}
+        {page === 'company' && selectedCompanyId && <CompanyDetail id={selectedCompanyId} go={go} />}
+        {page === 'company' && !selectedCompanyId && (
+          <div className="empty" style={{ padding: 40 }}>
+            No company selected.
+            <div style={{ marginTop: 12 }}>
+              <button type="button" className="btn" onClick={() => go('companies')}>← Companies</button>
+            </div>
+          </div>
+        )}
         {page === 'tasks' && <Tasks go={go} />}
         {page === 'meetings' && <MeetingsCalls go={go} />}
         {page === 'opportunities' && <Opportunities go={go} />}

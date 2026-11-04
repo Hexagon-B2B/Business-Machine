@@ -102,8 +102,15 @@ export default function Companies({ go }) {
     setLoading(true)
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
-    const sortable = ['name', 'city', 'industry', 'lifecycle_status', 'research_status', 'employee_count']
-    const orderCol = sortable.includes(sortKey) ? sortKey : 'name'
+    // UI column keys → DB columns (activity cols are not server-sortable)
+    const SORT_DB = {
+      name: 'name',
+      city: 'city',
+      industry: 'industry',
+      lifecycle: 'lifecycle_status',
+      research: 'research_status',
+    }
+    const orderCol = SORT_DB[sortKey] || 'name'
 
     const selectCols = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, not_qualified_reason, metadata'
     const selectColsSafe = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, metadata'
@@ -112,7 +119,7 @@ export default function Companies({ go }) {
       let query = supabase.from('companies')
         .select(cols, { count: 'exact' })
         .neq('state', 'deleted')
-        .order(orderCol, { ascending: sortDir === 'asc' })
+        .order(orderCol, { ascending: sortDir === 'asc', nullsFirst: false })
         .range(from, to)
       if (lifecycle !== 'all') query = query.eq('lifecycle_status', lifecycle)
       if (q.trim()) {
@@ -136,17 +143,11 @@ export default function Companies({ go }) {
   }
 
   function onSort(key) {
-    const colMap = {
-      name: 'name',
-      city: 'city',
-      industry: 'industry',
-      lifecycle: 'lifecycle_status',
-      research: 'research_status',
-      employees: 'employee_count',
-    }
-    const col = colMap[key] || key
-    if (sortKey === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(col); setSortDir('asc') }
+    // Only real company columns — tasks/calls/opps/pipeline are computed counts, not DB orderable
+    const sortable = ['name', 'city', 'industry', 'lifecycle', 'research']
+    if (!sortable.includes(key)) return
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
     setPage(1)
   }
 

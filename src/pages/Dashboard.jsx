@@ -5,9 +5,9 @@ import { DEFAULT_TRIGGER_CONFIG } from '../constants'
 import { PageHead, Badge } from '../ui'
 
 const sectionTitle = {
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 800,
-  letterSpacing: '0.04em',
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
   color: '#64748b',
   margin: 0,
@@ -102,15 +102,15 @@ export default function Dashboard({ go }) {
         onClick={() => go('tasks')}
         onKeyDown={e => { if (e.key === 'Enter') go('tasks') }}
         style={{
-          padding: '8px 0',
+          padding: '7px 0',
           borderBottom: '1px solid #f1f5f9',
           fontSize: 13,
           cursor: 'pointer',
-          lineHeight: 1.35,
+          lineHeight: 1.3,
         }}
       >
         <div style={{ fontWeight: 600, color: '#0f172a' }}>{t.title}</div>
-        <div style={{ color: '#64748b', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2, fontSize: 12 }}>
+        <div style={{ color: '#64748b', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2, fontSize: 12, alignItems: 'center' }}>
           {t.companies?.name && <span style={{ color: accent, fontWeight: 600 }}>{t.companies.name}</span>}
           {due && <span>Due {due}</span>}
           {t.priority && t.priority !== 'medium' && (
@@ -121,27 +121,46 @@ export default function Dashboard({ go }) {
     )
   }
 
-  function WorkCard({ title, count, actionLabel, onAction, children, empty }) {
+  function WorkCard({ title, count, actionLabel, onAction, children, empty, accent }) {
+    const accentColor = accent === 'red' ? '#ef4444' : accent === 'blue' ? '#2563eb' : accent === 'slate' ? '#94a3b8' : null
     return (
-      <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        className="card"
+        style={{
+          padding: '12px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          borderLeft: accentColor ? `3px solid ${accentColor}` : undefined,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
             <h2 style={sectionTitle}>{title}</h2>
             {count > 0 && (
               <span style={{
-                fontSize: 11, fontWeight: 700, color: '#475569',
-                background: '#f1f5f9', borderRadius: 999, padding: '2px 8px',
+                fontSize: 11,
+                fontWeight: 700,
+                color: accent === 'red' ? '#991b1b' : accent === 'blue' ? '#1e40af' : '#475569',
+                background: accent === 'red' ? '#fee2e2' : accent === 'blue' ? '#dbeafe' : '#f1f5f9',
+                borderRadius: 999,
+                padding: '1px 7px',
+                flexShrink: 0,
               }}>{count}</span>
             )}
           </div>
           {onAction && (
-            <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={onAction}>
+            <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 9px', minHeight: 0, flexShrink: 0 }} onClick={onAction}>
               {actionLabel || 'View'}
             </button>
           )}
         </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {children || <div style={{ padding: '20px 8px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>{empty}</div>}
+        <div style={{ flex: 1, overflow: 'auto', maxHeight: 280 }}>
+          {children || (
+            <div style={{ padding: '18px 6px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+              {empty}
+            </div>
+          )}
         </div>
       </div>
     )
@@ -149,14 +168,13 @@ export default function Dashboard({ go }) {
 
   if (loading) return <div className="loading">Loading…</div>
 
-  const cards = [
+  const kpiCards = [
     { label: 'Companies', value: stats.companies, page: 'companies' },
     { label: 'Contacts', value: stats.contacts, page: 'contacts' },
-    { label: 'Open tasks', value: stats.openTasks, page: 'tasks', highlight: stats.openTasks > 0 },
+    { label: 'Open tasks', value: stats.openTasks, page: 'tasks' },
     { label: 'Meetings', value: stats.meetings, page: 'meetings' },
-    { label: 'Open opps', value: stats.openOpps, page: 'opportunities', highlight: stats.openOpps > 0 },
+    { label: 'Open opps', value: stats.openOpps, page: 'opportunities' },
     { label: 'Research', value: stats.research, page: 'research' },
-    { label: 'Not billed 6m', value: dormantCount, page: null, action: 'dormant', warn: dormantCount > 0 },
   ]
 
   return (
@@ -175,34 +193,32 @@ export default function Dashboard({ go }) {
       </PageHead>
 
       {showCfg && (
-        <div className="card" style={{ marginBottom: 14, padding: 14, border: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-            <div>
-              <h2 style={{ ...sectionTitle, marginBottom: 4 }}>Trigger criteria</h2>
-              <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Saved on this browser. Applies the next time you Generate.</p>
-            </div>
+        <div className="card" style={{ marginBottom: 14, padding: 14 }}>
+          <div style={{ marginBottom: 10 }}>
+            <h2 style={{ ...sectionTitle, marginBottom: 4 }}>Trigger criteria</h2>
+            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Saved on this browser. Applies the next time you Generate.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 12 }}>
             <label style={{ fontSize: 12 }}>
               <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>Max new tasks</div>
               <input className="input" type="number" min={1} max={50} value={cfg.maxNew}
-                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
+                style={{ minHeight: 34, padding: '5px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, maxNew: Number(e.target.value) || 15 })} />
             </label>
             <label style={{ fontSize: 12 }}>
               <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>Employee threshold</div>
               <input className="input" type="number" min={0} value={cfg.employeeThreshold}
-                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
+                style={{ minHeight: 34, padding: '5px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, employeeThreshold: Number(e.target.value) || 0 })} />
             </label>
             <label style={{ fontSize: 12 }}>
               <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>High employee</div>
               <input className="input" type="number" min={0} value={cfg.employeeHighThreshold}
-                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
+                style={{ minHeight: 34, padding: '5px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, employeeHighThreshold: Number(e.target.value) || 0 })} />
             </label>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginBottom: 12, fontSize: 13 }}>
             {[
               ['enableMissingDetails', 'Missing details'],
               ['enableEmployeeCount', 'Employee scale'],
@@ -219,8 +235,8 @@ export default function Dashboard({ go }) {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={saveCfg}>Save</button>
-            <button type="button" className="btn" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={resetCfg}>Reset defaults</button>
+            <button type="button" className="btn primary" style={{ minHeight: 34, padding: '5px 12px', fontSize: 13 }} onClick={saveCfg}>Save</button>
+            <button type="button" className="btn" style={{ minHeight: 34, padding: '5px 12px', fontSize: 13 }} onClick={resetCfg}>Reset defaults</button>
             {cfgMsg && <span style={{ fontSize: 12, color: '#065f46' }}>{cfgMsg}</span>}
           </div>
         </div>
@@ -231,7 +247,7 @@ export default function Dashboard({ go }) {
           className="notice"
           style={{
             marginBottom: 14,
-            padding: '10px 12px',
+            padding: '9px 12px',
             background: result.errors?.length ? '#fef2f2' : '#ecfdf5',
             borderColor: result.errors?.length ? '#fecaca' : '#a7f3d0',
             color: result.errors?.length ? '#991b1b' : '#065f46',
@@ -245,73 +261,93 @@ export default function Dashboard({ go }) {
         </div>
       )}
 
+      {/* KPI strip — 6 core metrics, equal weight */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
         gap: 10,
-        marginBottom: 16,
-      }}>
-        {cards.map(c => {
-          const isWarn = c.warn && c.value > 0
-          return (
-            <div
-              key={c.label}
-              className="card"
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                if (c.action === 'dormant') setShowDormant(s => !s)
-                else if (c.page) go(c.page)
-              }}
-              onKeyDown={e => {
-                if (e.key !== 'Enter') return
-                if (c.action === 'dormant') setShowDormant(s => !s)
-                else if (c.page) go(c.page)
-              }}
-              style={{
-                padding: '12px 14px',
-                cursor: 'pointer',
-                borderColor: isWarn ? '#fcd34d' : '#e2e8f0',
-                background: isWarn ? '#fffbeb' : '#fff',
-                transition: 'border-color 0.15s, box-shadow 0.15s',
-              }}
-            >
-              <div style={{ fontSize: 11, fontWeight: 700, color: isWarn ? '#92400e' : '#64748b', letterSpacing: '0.02em' }}>
-                {c.label}
-              </div>
-              <div style={{
-                fontSize: 22,
-                fontWeight: 800,
-                marginTop: 4,
-                color: isWarn ? '#b45309' : '#0f172a',
-                lineHeight: 1.1,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {Number(c.value).toLocaleString()}
-              </div>
-              {c.action === 'dormant' && (
-                <div style={{ fontSize: 10, color: '#92400e', marginTop: 4 }}>
-                  {showDormant ? 'Hide list' : 'View list'}
-                </div>
-              )}
+        marginBottom: 14,
+      }}
+        className="dash-kpi"
+      >
+        {kpiCards.map(c => (
+          <div
+            key={c.label}
+            className="card"
+            role="button"
+            tabIndex={0}
+            onClick={() => c.page && go(c.page)}
+            onKeyDown={e => { if (e.key === 'Enter' && c.page) go(c.page) }}
+            style={{
+              padding: '12px 12px',
+              cursor: 'pointer',
+              transition: 'border-color 0.12s, box-shadow 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(15,23,42,0.06)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)' }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {c.label}
             </div>
-          )
-        })}
+            <div style={{
+              fontSize: 22,
+              fontWeight: 800,
+              marginTop: 4,
+              color: '#0f172a',
+              lineHeight: 1.1,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {Number(c.value).toLocaleString()}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {showDormant && (
-        <div className="card" style={{ marginBottom: 16, padding: 14, borderColor: '#fcd34d', background: '#fffbeb' }}>
+      {/* Dormant alert — only when relevant, not mixed into KPIs */}
+      {dormantCount > 0 && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderColor: '#fcd34d',
+            background: '#fffbeb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+              {dormantCount.toLocaleString()} active compan{dormantCount === 1 ? 'y' : 'ies'} not billed in 6 months
+            </div>
+            <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
+              Review lifecycle or update last billed date.
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn"
+            style={{ fontSize: 12, padding: '5px 12px', minHeight: 0, flexShrink: 0, borderColor: '#f59e0b', color: '#92400e' }}
+            onClick={() => setShowDormant(s => !s)}
+          >
+            {showDormant ? 'Hide list' : 'View list'}
+          </button>
+        </div>
+      )}
+
+      {showDormant && dormantCount > 0 && (
+        <div className="card" style={{ marginBottom: 14, padding: 14, borderColor: '#fcd34d', background: '#fffbeb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
             <h2 style={{ ...sectionTitle, color: '#92400e' }}>Active — not billed in 6 months</h2>
-            <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={() => setShowDormant(false)}>Close</button>
+            <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 9px', minHeight: 0 }} onClick={() => setShowDormant(false)}>Close</button>
           </div>
-          <p style={{ fontSize: 12, color: '#78716c', marginBottom: 10 }}>
-            Open a company to update lifecycle or set last billed date.
-          </p>
           {dormant.length === 0 ? (
-            <div style={{ padding: 12, color: '#64748b', fontSize: 13 }}>None — good coverage.</div>
+            <div style={{ padding: 10, color: '#64748b', fontSize: 13 }}>None in this sample.</div>
           ) : (
-            <div className="table-wrap" style={{ maxHeight: 280 }}>
+            <div className="table-wrap" style={{ maxHeight: 260 }}>
               <table className="table">
                 <thead>
                   <tr>
@@ -337,34 +373,38 @@ export default function Dashboard({ go }) {
         </div>
       )}
 
+      {/* Work queues */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         gap: 12,
-        marginBottom: 16,
-      }}>
-        <WorkCard title="Overdue" count={overdue.length} actionLabel="All tasks" onAction={() => go('tasks')} empty="None overdue">
+        marginBottom: 14,
+      }}
+        className="dash-queues"
+      >
+        <WorkCard title="Overdue" count={overdue.length} actionLabel="All tasks" onAction={() => go('tasks')} empty="None overdue" accent="red">
           {overdue.length > 0 && overdue.map(t => taskRow(t, '#dc2626'))}
         </WorkCard>
-        <WorkCard title="Scheduled" count={scheduled.length} empty="No scheduled tasks">
+        <WorkCard title="Scheduled" count={scheduled.length} empty="No scheduled tasks" accent="slate">
           {scheduled.length > 0 && scheduled.map(t => taskRow(t, '#64748b'))}
         </WorkCard>
-        <WorkCard title="Trigger work" count={triggerWork.length} empty="None yet — click Generate">
+        <WorkCard title="Trigger work" count={triggerWork.length} empty="None yet — click Generate" accent="blue">
           {triggerWork.length > 0 && triggerWork.map(t => taskRow(t, '#1e40af'))}
         </WorkCard>
       </div>
 
-      <div className="card" style={{ padding: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+      {/* Recent activity */}
+      <div className="card" style={{ padding: '12px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
           <h2 style={sectionTitle}>Recent meetings & calls</h2>
-          <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={() => go('meetings')}>
+          <button type="button" className="btn" style={{ fontSize: 11, padding: '3px 9px', minHeight: 0 }} onClick={() => go('meetings')}>
             View all
           </button>
         </div>
         {recentMeetings.length === 0 ? (
-          <div style={{ padding: '20px 8px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>None logged yet</div>
+          <div style={{ padding: '18px 6px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>None logged yet</div>
         ) : (
-          <div className="table-wrap" style={{ maxHeight: 320 }}>
+          <div className="table-wrap" style={{ maxHeight: 300 }}>
             <table className="table">
               <thead>
                 <tr>
@@ -394,6 +434,16 @@ export default function Dashboard({ go }) {
           </div>
         )}
       </div>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .dash-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .dash-queues { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 520px) {
+          .dash-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+      `}</style>
     </div>
   )
 }

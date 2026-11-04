@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Companies from './pages/Companies'
 import CompanyDetail from './pages/CompanyDetail'
+import Contacts from './pages/Contacts'
 import Tasks from './pages/Tasks'
 import MeetingsCalls from './pages/MeetingsCalls'
 import Opportunities from './pages/Opportunities'
@@ -43,6 +44,7 @@ export default function App() {
   const nav = [
     ['dashboard', 'Action Centre'],
     ['companies', 'Companies'],
+    ['contacts', 'Contacts'],
     ['tasks', 'Tasks'],
     ['meetings', 'Meetings & Calls'],
     ['opportunities', 'Opportunities'],
@@ -121,6 +123,7 @@ export default function App() {
       <main className="app-main">
         {page === 'dashboard' && <Dashboard go={go} />}
         {page === 'companies' && <Companies go={go} />}
+        {page === 'contacts' && <Contacts go={go} />}
         {page === 'company' && selectedCompanyId && <CompanyDetail id={selectedCompanyId} go={go} />}
         {page === 'company' && !selectedCompanyId && (
           <div className="empty" style={{ padding: 40 }}>

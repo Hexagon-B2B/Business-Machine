@@ -51,11 +51,23 @@ export default function Tasks({ go }) {
     setLoading(true)
     const from = (page - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
+    const SORT_MAP = {
+      title: { col: 'title' },
+      priority: { col: 'priority' },
+      status: { col: 'status' },
+      due_at: { col: 'due_at' },
+      company: { col: 'name', foreignTable: 'companies' },
+    }
+    const sortSpec = SORT_MAP[sortKey] || SORT_MAP.due_at
     let q = supabase.from('tasks')
       .select('id, title, description, priority, status, due_at, company_id, source, metadata, state, companies(name)', { count: 'exact' })
       .neq('state', 'deleted')
-      .order(sortKey, { ascending: sortDir === 'asc', nullsFirst: false })
-      .range(from, to)
+    if (sortSpec.foreignTable) {
+      q = q.order(sortSpec.col, { ascending: sortDir === 'asc', nullsFirst: false, foreignTable: sortSpec.foreignTable })
+    } else {
+      q = q.order(sortSpec.col, { ascending: sortDir === 'asc', nullsFirst: false })
+    }
+    q = q.range(from, to)
     if (filter === 'open') q = q.eq('status', 'open')
     else if (filter === 'in_progress') q = q.eq('status', 'in_progress')
     else if (filter === 'active') q = q.in('status', ['open', 'in_progress'])
@@ -75,6 +87,9 @@ export default function Tasks({ go }) {
   }
 
   function onSort(key) {
+    if (key === 'actions') return
+    const sortable = ['title', 'company', 'priority', 'status', 'due_at']
+    if (!sortable.includes(key)) return
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
     setPage(1)
@@ -294,8 +309,8 @@ export default function Tasks({ go }) {
           { value: 'in_progress', label: 'In progress' },
           { value: 'active', label: 'Active' },
           { value: 'done', label: 'Done' },
-          { value: 'cancelled', label: 'Cancelled' },
           { value: 'all', label: 'All' },
+          { value: 'cancelled', label: 'Cancelled' },
         ]} />
 
       {selected.size > 0 && (

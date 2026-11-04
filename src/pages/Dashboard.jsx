@@ -4,6 +4,15 @@ import { runDailyTriggerScan, getTriggerConfig, saveTriggerConfig } from '../tri
 import { DEFAULT_TRIGGER_CONFIG } from '../constants'
 import { PageHead, Badge } from '../ui'
 
+const sectionTitle = {
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: '#64748b',
+  margin: 0,
+}
+
 export default function Dashboard({ go }) {
   const [stats, setStats] = useState({ companies: 0, contacts: 0, openTasks: 0, meetings: 0, openOpps: 0, research: 0 })
   const [overdue, setOverdue] = useState([])
@@ -34,11 +43,11 @@ export default function Dashboard({ go }) {
       supabase.from('tasks').select('id, title, due_at, priority, status, source, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).lt('due_at', today).order('due_at').limit(10),
       supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).or('source.is.null,source.eq.user').order('due_at').limit(10),
       supabase.from('tasks').select('id, title, due_at, priority, status, source, metadata, company_id, companies(name)').neq('state', 'deleted').in('status', ['open', 'in_progress']).in('source', ['trigger', 'research']).order('due_at').limit(15),
-      supabase.from('meetings_calls').select('id, subject, type, outcome, next_action, scheduled_at, company_id').neq('state', 'deleted').order('scheduled_at', { ascending: false }).limit(6)
+      supabase.from('meetings_calls').select('id, subject, type, outcome, next_action, scheduled_at, company_id').neq('state', 'deleted').order('scheduled_at', { ascending: false }).limit(6),
     ])
     setStats({
       companies: c.count || 0, contacts: ct.count || 0, openTasks: tOpen.count || 0,
-      meetings: m.count || 0, openOpps: o.count || 0, research: rq.count || 0
+      meetings: m.count || 0, openOpps: o.count || 0, research: rq.count || 0,
     })
     setOverdue(tasksOver.data || [])
     setScheduled((tasksUser.data || []).filter(t => t.source !== 'trigger' && t.source !== 'research').slice(0, 8))
@@ -58,7 +67,6 @@ export default function Dashboard({ go }) {
       .limit(50)
     setDormant(activeCos || [])
     setDormantCount(activeCnt || (activeCos || []).length)
-
     setLoading(false)
   }
 
@@ -85,14 +93,55 @@ export default function Dashboard({ go }) {
   }
 
   function taskRow(t, accent) {
+    const due = t.due_at ? new Date(t.due_at).toLocaleDateString() : null
     return (
-      <div key={t.id} style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13, cursor: 'pointer' }}
-        onClick={() => go('tasks')}>
-        <div style={{ fontWeight: 600 }}>{t.title}</div>
-        <div style={{ color: '#64748b', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {t.companies?.name && <span style={{ color: accent }}>{t.companies.name}</span>}
-          {t.due_at && <span>Due {new Date(t.due_at).toLocaleDateString()}</span>}
-          <Badge tone={t.priority === 'high' ? 'red' : 'gray'}>{t.priority}</Badge>
+      <div
+        key={t.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => go('tasks')}
+        onKeyDown={e => { if (e.key === 'Enter') go('tasks') }}
+        style={{
+          padding: '8px 0',
+          borderBottom: '1px solid #f1f5f9',
+          fontSize: 13,
+          cursor: 'pointer',
+          lineHeight: 1.35,
+        }}
+      >
+        <div style={{ fontWeight: 600, color: '#0f172a' }}>{t.title}</div>
+        <div style={{ color: '#64748b', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2, fontSize: 12 }}>
+          {t.companies?.name && <span style={{ color: accent, fontWeight: 600 }}>{t.companies.name}</span>}
+          {due && <span>Due {due}</span>}
+          {t.priority && t.priority !== 'medium' && (
+            <Badge tone={t.priority === 'high' ? 'red' : 'gray'}>{t.priority}</Badge>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  function WorkCard({ title, count, actionLabel, onAction, children, empty }) {
+    return (
+      <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={sectionTitle}>{title}</h2>
+            {count > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#475569',
+                background: '#f1f5f9', borderRadius: 999, padding: '2px 8px',
+              }}>{count}</span>
+            )}
+          </div>
+          {onAction && (
+            <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={onAction}>
+              {actionLabel || 'View'}
+            </button>
+          )}
+        </div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {children || <div style={{ padding: '20px 8px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>{empty}</div>}
         </div>
       </div>
     )
@@ -102,49 +151,58 @@ export default function Dashboard({ go }) {
 
   const cards = [
     { label: 'Companies', value: stats.companies, page: 'companies' },
-    { label: 'Contacts', value: stats.contacts, page: 'companies' },
-    { label: 'Open Tasks', value: stats.openTasks, page: 'tasks' },
+    { label: 'Contacts', value: stats.contacts, page: 'contacts' },
+    { label: 'Open tasks', value: stats.openTasks, page: 'tasks', highlight: stats.openTasks > 0 },
     { label: 'Meetings', value: stats.meetings, page: 'meetings' },
-    { label: 'Open Opps', value: stats.openOpps, page: 'opportunities' },
-    { label: 'Research queue', value: stats.research, page: 'research' },
-    { label: 'Active not billed 6m', value: dormantCount, page: null, action: 'dormant' },
+    { label: 'Open opps', value: stats.openOpps, page: 'opportunities', highlight: stats.openOpps > 0 },
+    { label: 'Research', value: stats.research, page: 'research' },
+    { label: 'Not billed 6m', value: dormantCount, page: null, action: 'dormant', warn: dormantCount > 0 },
   ]
 
   return (
-    <div style={{ padding: 28 }}>
-      <PageHead eyebrow="Daily Command Centre" title="Action Centre" subtitle="Scheduled work you created, plus trigger work the system prepares from employees, industry, missing details, news/hiring/funding and quotations.">
+    <div style={{ padding: '20px 24px', maxWidth: 1280 }}>
+      <PageHead
+        eyebrow="Daily"
+        title="Action Centre"
+        subtitle="What needs attention today — tasks, triggers, and follow-ups."
+      >
         <button type="button" className="btn" onClick={() => setShowCfg(s => !s)}>
           {showCfg ? 'Hide criteria' : 'Trigger criteria'}
         </button>
         <button type="button" className="btn primary" disabled={running} onClick={generate}>
-          {running ? 'Generating…' : "Generate today's trigger work"}
+          {running ? 'Generating…' : 'Generate trigger work'}
         </button>
       </PageHead>
 
       {showCfg && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1e40af' }}>
-          <h2 style={{ fontSize: 14, marginBottom: 8 }}>Trigger criteria (saved on this browser)</h2>
-          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-            Controls what Generate creates each day. Change limits and which signal types run, then Generate again.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 12 }}>
+        <div className="card" style={{ marginBottom: 14, padding: 14, border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+            <div>
+              <h2 style={{ ...sectionTitle, marginBottom: 4 }}>Trigger criteria</h2>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Saved on this browser. Applies the next time you Generate.</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
             <label style={{ fontSize: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Max new tasks / run</div>
+              <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>Max new tasks</div>
               <input className="input" type="number" min={1} max={50} value={cfg.maxNew}
+                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, maxNew: Number(e.target.value) || 15 })} />
             </label>
             <label style={{ fontSize: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Employee threshold</div>
+              <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>Employee threshold</div>
               <input className="input" type="number" min={0} value={cfg.employeeThreshold}
+                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, employeeThreshold: Number(e.target.value) || 0 })} />
             </label>
             <label style={{ fontSize: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>High employee threshold</div>
+              <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>High employee</div>
               <input className="input" type="number" min={0} value={cfg.employeeHighThreshold}
+                style={{ minHeight: 36, padding: '6px 10px', fontSize: 13 }}
                 onChange={e => setCfg({ ...cfg, employeeHighThreshold: Number(e.target.value) || 0 })} />
             </label>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', marginBottom: 12, fontSize: 13 }}>
             {[
               ['enableMissingDetails', 'Missing details'],
               ['enableEmployeeCount', 'Employee scale'],
@@ -154,130 +212,187 @@ export default function Dashboard({ go }) {
               ['enableQuotation', 'Quotation follow-up'],
               ['enableMeeting', 'Meeting next-action'],
             ].map(([key, label]) => (
-              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#334155' }}>
                 <input type="checkbox" checked={!!cfg[key]} onChange={e => setCfg({ ...cfg, [key]: e.target.checked })} />
                 {label}
               </label>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" className="btn primary" onClick={saveCfg}>Save criteria</button>
-            <button type="button" className="btn" onClick={resetCfg}>Reset defaults</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={saveCfg}>Save</button>
+            <button type="button" className="btn" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={resetCfg}>Reset defaults</button>
             {cfgMsg && <span style={{ fontSize: 12, color: '#065f46' }}>{cfgMsg}</span>}
           </div>
         </div>
       )}
 
       {result && (
-        <div className="notice" style={{ marginBottom: 16, background: result.errors?.length ? '#fef2f2' : '#ecfdf5', borderColor: result.errors?.length ? '#fecaca' : '#a7f3d0' }}>
+        <div
+          className="notice"
+          style={{
+            marginBottom: 14,
+            padding: '10px 12px',
+            background: result.errors?.length ? '#fef2f2' : '#ecfdf5',
+            borderColor: result.errors?.length ? '#fecaca' : '#a7f3d0',
+            color: result.errors?.length ? '#991b1b' : '#065f46',
+          }}
+        >
           {result.errors?.length
             ? (String(result.errors[0]).includes('task_code') || String(result.errors[0]).includes('sequence')
-              ? 'Task sequence permission is still missing. Run DB_VERIFY_AND_FIX.sql in Supabase, then click Generate again.'
+              ? 'Task sequence permission is still missing. Run DB_VERIFY_AND_FIX.sql in Supabase, then Generate again.'
               : result.errors.join('; '))
-            : `Run complete: created ${result.created || 0} · already open ${result.skipped || 0} · considered ${result.considered || 0}`}
+            : `Run complete — created ${result.created || 0} · already open ${result.skipped || 0} · considered ${result.considered || 0}`}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 16 }}>
-        {cards.map(c => (
-          <div
-            key={c.label}
-            className="card"
-            style={{
-              cursor: 'pointer',
-              borderLeft: c.action === 'dormant' && dormantCount > 0 ? '4px solid #f59e0b' : undefined,
-              background: c.action === 'dormant' && dormantCount > 0 ? '#fffbeb' : undefined,
-            }}
-            onClick={() => {
-              if (c.action === 'dormant') setShowDormant(s => !s)
-              else if (c.page) go(c.page)
-            }}
-          >
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{c.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: c.action === 'dormant' && dormantCount > 0 ? '#b45309' : undefined }}>
-              {c.value.toLocaleString()}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+        gap: 10,
+        marginBottom: 16,
+      }}>
+        {cards.map(c => {
+          const isWarn = c.warn && c.value > 0
+          return (
+            <div
+              key={c.label}
+              className="card"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (c.action === 'dormant') setShowDormant(s => !s)
+                else if (c.page) go(c.page)
+              }}
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return
+                if (c.action === 'dormant') setShowDormant(s => !s)
+                else if (c.page) go(c.page)
+              }}
+              style={{
+                padding: '12px 14px',
+                cursor: 'pointer',
+                borderColor: isWarn ? '#fcd34d' : '#e2e8f0',
+                background: isWarn ? '#fffbeb' : '#fff',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 700, color: isWarn ? '#92400e' : '#64748b', letterSpacing: '0.02em' }}>
+                {c.label}
+              </div>
+              <div style={{
+                fontSize: 22,
+                fontWeight: 800,
+                marginTop: 4,
+                color: isWarn ? '#b45309' : '#0f172a',
+                lineHeight: 1.1,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {Number(c.value).toLocaleString()}
+              </div>
+              {c.action === 'dormant' && (
+                <div style={{ fontSize: 10, color: '#92400e', marginTop: 4 }}>
+                  {showDormant ? 'Hide list' : 'View list'}
+                </div>
+              )}
             </div>
-            {c.action === 'dormant' && (
-              <div style={{ fontSize: 11, color: '#92400e', marginTop: 4 }}>Click to {showDormant ? 'hide' : 'view'} list</div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {showDormant && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <h2 style={{ fontSize: 15, margin: 0 }}>Active customers not billed in 6 months</h2>
-            <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => setShowDormant(false)}>Close</button>
+        <div className="card" style={{ marginBottom: 16, padding: 14, borderColor: '#fcd34d', background: '#fffbeb' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+            <h2 style={{ ...sectionTitle, color: '#92400e' }}>Active — not billed in 6 months</h2>
+            <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={() => setShowDormant(false)}>Close</button>
           </div>
-          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-            Lifecycle is Active, but last billed date is empty or older than 6 months. Open a company to update lifecycle or set last billed date.
+          <p style={{ fontSize: 12, color: '#78716c', marginBottom: 10 }}>
+            Open a company to update lifecycle or set last billed date.
           </p>
           {dormant.length === 0 ? (
-            <div className="empty" style={{ padding: 12 }}>None — good coverage.</div>
+            <div style={{ padding: 12, color: '#64748b', fontSize: 13 }}>None — good coverage.</div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>City</th>
-                  <th>Industry</th>
-                  <th>Last billed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dormant.map(co => (
-                  <tr key={co.id} style={{ cursor: 'pointer' }} onClick={() => go('company', co.id)}>
-                    <td style={{ fontWeight: 600, color: '#2563eb' }}>{co.name}</td>
-                    <td>{co.city || '—'}</td>
-                    <td>{co.industry || '—'}</td>
-                    <td>{co.last_billed_at ? new Date(co.last_billed_at).toLocaleDateString() : 'Never'}</td>
+            <div className="table-wrap" style={{ maxHeight: 280 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>City</th>
+                    <th>Industry</th>
+                    <th>Last billed</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {dormant.map(co => (
+                    <tr key={co.id} style={{ cursor: 'pointer' }} onClick={() => go('company', co.id)}>
+                      <td style={{ fontWeight: 600, color: '#2563eb' }}>{co.name}</td>
+                      <td>{co.city || '—'}</td>
+                      <td>{co.industry || '—'}</td>
+                      <td>{co.last_billed_at ? new Date(co.last_billed_at).toLocaleDateString() : 'Never'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 14 }}>Overdue</h2>
-            <button className="btn" onClick={() => go('tasks')}>All tasks</button>
-          </div>
-          {overdue.length === 0 ? <div className="empty" style={{ padding: 16 }}>None overdue</div> : overdue.map(t => taskRow(t, '#dc2626'))}
-        </div>
-        <div className="card">
-          <h2 style={{ fontSize: 14, marginBottom: 12 }}>Scheduled (you created)</h2>
-          {scheduled.length === 0 ? <div className="empty" style={{ padding: 16 }}>No scheduled tasks</div> : scheduled.map(t => taskRow(t, '#64748b'))}
-        </div>
-        <div className="card">
-          <h2 style={{ fontSize: 14, marginBottom: 12 }}>Trigger work</h2>
-          {triggerWork.length === 0 ? <div className="empty" style={{ padding: 16 }}>None yet. Click Generate.</div> : triggerWork.map(t => taskRow(t, '#1e40af'))}
-        </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        <WorkCard title="Overdue" count={overdue.length} actionLabel="All tasks" onAction={() => go('tasks')} empty="None overdue">
+          {overdue.length > 0 && overdue.map(t => taskRow(t, '#dc2626'))}
+        </WorkCard>
+        <WorkCard title="Scheduled" count={scheduled.length} empty="No scheduled tasks">
+          {scheduled.length > 0 && scheduled.map(t => taskRow(t, '#64748b'))}
+        </WorkCard>
+        <WorkCard title="Trigger work" count={triggerWork.length} empty="None yet — click Generate">
+          {triggerWork.length > 0 && triggerWork.map(t => taskRow(t, '#1e40af'))}
+        </WorkCard>
       </div>
 
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 14 }}>Recent Meetings & Calls</h2>
-          <button className="btn" onClick={() => go('meetings')}>View all</button>
+      <div className="card" style={{ padding: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+          <h2 style={sectionTitle}>Recent meetings & calls</h2>
+          <button type="button" className="btn" style={{ fontSize: 11, padding: '4px 10px', minHeight: 0 }} onClick={() => go('meetings')}>
+            View all
+          </button>
         </div>
-        {recentMeetings.length === 0 ? <div className="empty" style={{ padding: 16 }}>None logged yet</div> :
-          <table className="table">
-            <thead><tr><th>Type</th><th>Subject</th><th>Outcome</th><th>Next Action</th><th>When</th></tr></thead>
-            <tbody>
-              {recentMeetings.map(m => (
-                <tr key={m.id}>
-                  <td><Badge tone="blue">{m.type}</Badge></td>
-                  <td style={{ fontWeight: 600 }}>{m.subject}</td>
-                  <td>{m.outcome || '—'}</td>
-                  <td style={{ color: m.next_action ? '#1e40af' : undefined }}>{m.next_action || '—'}</td>
-                  <td>{m.scheduled_at ? new Date(m.scheduled_at).toLocaleDateString() : '—'}</td>
+        {recentMeetings.length === 0 ? (
+          <div style={{ padding: '20px 8px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>None logged yet</div>
+        ) : (
+          <div className="table-wrap" style={{ maxHeight: 320 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Subject</th>
+                  <th>Outcome</th>
+                  <th>Next action</th>
+                  <th>When</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>}
+              </thead>
+              <tbody>
+                {recentMeetings.map(m => (
+                  <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => go('meetings')}>
+                    <td><Badge tone="blue">{m.type}</Badge></td>
+                    <td style={{ fontWeight: 600 }}>{m.subject || '—'}</td>
+                    <td>{m.outcome || '—'}</td>
+                    <td style={{ color: m.next_action ? '#1e40af' : undefined, fontWeight: m.next_action ? 600 : 400 }}>
+                      {m.next_action || '—'}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {m.scheduled_at ? new Date(m.scheduled_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

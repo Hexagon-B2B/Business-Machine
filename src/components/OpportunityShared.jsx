@@ -42,7 +42,7 @@ export const EMPTY_OPP_FORM = emptyOppForm()
 export function FirstQuoteFields() {
   return (
     <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, color: '#64748b' }}>
-      After create, open the opportunity → <strong>Quotations</strong> to set validity, delivery TAT, products, charges, and <strong>Copy for Excel</strong>.
+      Quotation is <strong>optional</strong> at create. After the opportunity is saved, open it to add products, charges, validity, delivery TAT, and use <strong>Copy for Excel</strong>.
     </div>
   )
 }
@@ -91,7 +91,6 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
     setSaving(true)
     const meta = { ...(row.metadata || {}), next_action: row.next_action || null, next_action_due: row.next_action_due || null, solution: row.solution || null }
     const payload = {
-      // name is locked after create — do not send updates
       stage: row.stage,
       deal_size: row.deal_size != null && row.deal_size !== '' ? Number(row.deal_size) : null,
       expected_close_date: row.expected_close_date || null,
@@ -141,17 +140,17 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           {goCompany && row.company_id && <button type="button" className="btn" onClick={() => goCompany(row.company_id)}>Open company</button>}
           <button type="button" className="btn" onClick={() => setShowQuote(s => !s)}>{showQuote ? 'Hide quotations' : 'Show quotations'}</button>
+          <button type="button" className="btn" onClick={onClose}>← Back to list</button>
         </div>
         <Actions saving={saving} onCancel={onClose} label="Save deal details" />
       </form>
       {showQuote && (
         <div style={{ marginTop: 16, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>2. Quotations</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Use <strong>Copy for Excel</strong> on each quote — includes Validity and Delivery TAT.</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Optional until you are ready. Use <strong>Copy for Excel</strong> on each quote — includes Validity and Delivery TAT.</div>
           <QuotationPanel
             opportunity={row}
             onTotalChange={(total) => {
-              // Silent local update only — avoid parent full reload (blink from Company tab)
               if (total != null) setRow(r => (r ? { ...r, deal_size: total } : r))
             }}
           />
@@ -163,6 +162,9 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
 
 export async function createOppWithOptionalTask(form, companyId) {
   const payload = buildOppCreatePayload({ company_id: companyId, form })
+  if (!(payload.requirement_description || '').trim()) {
+    return { data: null, error: { message: 'Requirement is required.' } }
+  }
   let { data, error } = await supabase.from('opportunities').insert(payload).select('id').single()
   if (error && /primary_contact|column/i.test(error.message)) {
     delete payload.primary_contact_id

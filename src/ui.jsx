@@ -97,12 +97,33 @@ export function DataTable({
 }
 
 export function Modal({ title, children, onClose, width = 480 }) {
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose && onClose()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div className="card" style={{ width, maxWidth: '94vw', maxHeight: '90vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={e => { if (e.target === e.currentTarget) onClose && onClose() }}
+    >
+      <div className="modal-panel card" style={{ width, maxWidth: '94vw', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
           <h2 style={{ fontSize: 17 }}>{title}</h2>
-          <button className="btn ghost" onClick={onClose}>×</button>
+          <button type="button" className="btn ghost modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         {children}
       </div>
@@ -243,8 +264,8 @@ export function CompanySearchSelect({ companies: companiesProp, value, onChange,
       {open && (
         <div style={{
           position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 80,
-          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-          maxHeight: 280, overflowY: 'auto', boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
+          maxHeight: 280, overflowY: 'auto', boxShadow: '0 12px 32px rgba(15,23,42,0.14)',
         }}>
           {loading ? (
             <div style={{ padding: 12, fontSize: 13, color: '#64748b' }}>Searching…</div>

@@ -36,10 +36,20 @@ export default function Companies({ go, access }) {
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
+  const [ownerMap, setOwnerMap] = useState({})
 
   useEffect(() => { load() }, [page, sortKey, sortDir, lifecycle, q, access?.isAdmin, JSON.stringify(access?.visibleIds)])
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function loadOwnerMap(rows) {
+    const oids = [...new Set((rows || []).map(r => r.owner_id).filter(Boolean))]
+    if (!oids.length) { setOwnerMap({}); return }
+    const { data: profs } = await supabase.from('profiles').select('id, full_name, email').in('id', oids)
+    const om = {}
+    for (const p of profs || []) om[p.id] = p.full_name || p.email || '—'
+    setOwnerMap(om)
+  }
 
   async function loadActivity(companyIds, { all = false } = {}) {
     const map = {}
@@ -128,7 +138,9 @@ export default function Companies({ go, access }) {
         return String(a.name || '').localeCompare(String(b.name || ''))
       })
       setTotal(withAct.length)
-      setItems(withAct.slice(from, to + 1))
+      const pageRows = withAct.slice(from, to + 1)
+      setItems(pageRows)
+      await loadOwnerMap(pageRows)
       setLoading(false)
       return
     }
@@ -146,8 +158,10 @@ export default function Companies({ go, access }) {
     if (error) console.error(error)
     const rows = data || []
     const activity = await loadActivity(rows.map(r => r.id))
-    setItems(rows.map(r => ({ ...r, _act: activity[r.id] || { tasks: 0, calls: 0, opps: 0, pipeline: 0 } })))
+    const mapped = rows.map(r => ({ ...r, _act: activity[r.id] || { tasks: 0, calls: 0, opps: 0, pipeline: 0 } }))
+    setItems(mapped)
     setTotal(count || 0)
+    await loadOwnerMap(mapped)
     setLoading(false)
   }
 
@@ -194,6 +208,9 @@ export default function Companies({ go, access }) {
       <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.name}{r.employee_count ? <span style={{ fontWeight: 400, fontSize: 11, color: '#94a3b8', marginLeft: 6 }}>{Number(r.employee_count).toLocaleString()} emp</span> : null}</span>
     ) },
     { key: 'city', label: 'City', render: r => r.city || r.hq_location || '—' },
+    { key: 'owner', label: 'Owner', render: r => (
+      <span style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{r.owner_id ? (ownerMap[r.owner_id] || '…') : '—'}</span>
+    ) },
     { key: 'industry', label: 'Industry', render: r => <span style={{ display: 'inline-block', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.industry || ''}>{r.industry || '—'}</span> },
     { key: 'lifecycle', label: 'Lifecycle', render: r => (
       <span style={{ whiteSpace: 'nowrap' }}><Badge>{lifecycleLabel(r.lifecycle_status)}</Badge>{r.lifecycle_status === 'not_qualified' && <span style={{ fontSize: 10, color: '#64748b', marginLeft: 6 }}>{notQualifiedReasonLabel(r.not_qualified_reason || r.metadata?.not_qualified_reason)}</span>}</span>

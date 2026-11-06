@@ -37,7 +37,7 @@ export default function Companies({ go, access }) {
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
 
-  useEffect(() => { load() }, [page, sortKey, sortDir, lifecycle, q, access?.isAdmin, JSON.stringify(access?.assignedIds)])
+  useEffect(() => { load() }, [page, sortKey, sortDir, lifecycle, q, access?.isAdmin, JSON.stringify(access?.visibleIds)])
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
@@ -91,14 +91,14 @@ export default function Companies({ go, access }) {
     const ACTIVITY_SORT = ['tasks', 'calls', 'opps', 'pipeline']
     const isActivitySort = ACTIVITY_SORT.includes(sortKey)
     const orderCol = SORT_DB[sortKey] || 'name'
-    const selectCols = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, not_qualified_reason, metadata'
+    const selectCols = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, not_qualified_reason, metadata, owner_id'
     const selectColsSafe = 'id, name, legal_name, website, email, industry, city, hq_location, country, gst_no, lifecycle_status, research_status, board_no, pincode, employee_count, metadata'
 
     function applyFilters(query) {
       query = query.neq('state', 'deleted')
-      if (access && !access.isAdmin && Array.isArray(access.assignedIds)) {
-        if (access.assignedIds.length === 0) query = query.eq('id', '00000000-0000-0000-0000-000000000000')
-        else query = query.in('id', access.assignedIds)
+      if (access && !access.isAdmin && Array.isArray(access.visibleIds)) {
+        if (access.visibleIds.length === 0) query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+        else query = query.in('id', access.visibleIds)
       }
       if (lifecycle !== 'all') query = query.eq('lifecycle_status', lifecycle)
       if (q.trim()) {
@@ -113,7 +113,7 @@ export default function Companies({ go, access }) {
         return await applyFilters(supabase.from('companies').select(cols)).order('name', { ascending: true }).limit(5000)
       }
       let { data, error } = await fetchAll(selectCols)
-      if (error && /not_qualified_reason|column/i.test(error.message || '')) {
+      if (error && /owner_id|not_qualified_reason|column/i.test(error.message || '')) {
         ;({ data, error } = await fetchAll(selectColsSafe))
       }
       if (error) console.error(error)
@@ -140,7 +140,7 @@ export default function Companies({ go, access }) {
     }
 
     let { data, count, error } = await buildQuery(selectCols)
-    if (error && /not_qualified_reason|column/i.test(error.message)) {
+    if (error && /owner_id|not_qualified_reason|column/i.test(error.message || '')) {
       ;({ data, count, error } = await buildQuery(selectColsSafe))
     }
     if (error) console.error(error)
@@ -172,15 +172,21 @@ export default function Companies({ go, access }) {
       board_no: form.board_no.trim() || null, website: form.website.trim() || null, email: form.email.trim() || null,
       gst_no: gst || null, industry: form.industry.trim() || null, notes: form.notes.trim() || null,
       state: 'active', lifecycle_status: 'prospect_no_contact', research_status: 'NOT_RESEARCHED', metadata: {},
+      owner_id: access?.userId || null,
     }
     let { error } = await supabase.from('companies').insert(payload)
-    if (error && /pincode|column/i.test(error.message)) {
+    if (error && /owner_id|column/i.test(error.message || '')) {
+      delete payload.owner_id
+      ;({ error } = await supabase.from('companies').insert(payload))
+      if (!error) setFlash('Company created. Run SQL 015 so owner is stored on new accounts.')
+    }
+    if (error && /pincode|column/i.test(error.message || '')) {
       delete payload.pincode
       ;({ error } = await supabase.from('companies').insert(payload))
     }
     setSaving(false)
     if (error) { setFlash('Create failed: ' + error.message); return }
-    setShowCreate(false); setForm({ ...emptyForm }); setFlash('Company created.'); load()
+    setShowCreate(false); setForm({ ...emptyForm }); setFlash('Company created — you are the Account Owner.'); load()
   }
 
   const columns = [
@@ -201,7 +207,7 @@ export default function Companies({ go, access }) {
 
   return (
     <div style={{ padding: '20px 24px' }}>
-      <PageHead eyebrow="Account" title="Companies" subtitle="Company-centric workspace — open a company to act. Counts = open tasks, logged calls/meetings, open opportunities & pipeline value.">
+      <PageHead eyebrow="Account" title="Companies" subtitle="Company-centric workspace. Creator becomes Account Owner. Only the owner can add tasks, meetings and opportunities.">
         <button type="button" className="btn primary" onClick={() => { setForm({ ...emptyForm }); setShowCreate(true) }}>+ New company</button>
       </PageHead>
       {flash && <div className="notice" style={{ marginBottom: 12 }}>{flash}</div>}

@@ -125,7 +125,6 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
         return next
       })
       const changed = items.find(it => it.id === id)
-      // Upgrade is per unit of base product — keep upgrade qty in sync with base qty
       if (changed && (changed.line_type || 'product') === 'product' && key === 'quantity') {
         const q = Number(val) || 1
         items = items.map(it =>
@@ -146,7 +145,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
         }
       }
       if (changed && changed.line_type === 'upgrade' && (key === 'margin_pct' || key === 'min_margin_pct' || key === 'transfer_price' || key === 'quantity')) {
-        const parent = items.find(it => it.id === changed.parent_id)
+        const parent = items.find(it => it.id === changed.parent_id || String(it.id) === String(changed.parent_id))
         if (parent) {
           const g = groupRollup(parent, items)
           const unit = g.unitCustomer != null
@@ -173,7 +172,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
   function setGroupCustomer(parentId, unitRate) {
     setForm(f => ({
       ...f,
-      items: f.items.map(it => it.id === parentId ? { ...it, customer_price: unitRate, margin_pct: '' } : it),
+      items: f.items.map(it => it.id === parentId ? { ...it, customer_price: unitRate } : it),
     }))
   }
 
@@ -284,19 +283,28 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
 
       {loading ? <div className="loading" style={{ padding: 16 }}>Loading…</div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {quotes.map(q => (
+          {quotes.map(q => {
+            const open = expandedId === q.id
+            const items = q.quotation_items || []
+            const groups = quoteGroups(items)
+            return (
             <div key={q.id} className="card" style={{ padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }}
+                onClick={() => setExpandedId(open ? null : q.id)}
+              >
                 <div>
                   <strong>{customerQuoteNo(q)}</strong>
                   <span style={{ marginLeft: 8, color: '#64748b', fontSize: 12 }}>v{q.version || 1}</span>
                   <span style={{ marginLeft: 8 }}><Badge>{q.status || 'draft'}</Badge></span>
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#2563eb' }}>{open ? 'Hide preview ▲' : 'Preview ▼'}</span>
                   <div style={{ fontSize: 13, marginTop: 4 }}>
                     Customer ₹{(q.total_value || 0).toLocaleString('en-IN')}
+                    {q.transfer_total != null ? <span style={{ color: '#64748b' }}> · Transfer ₹{Number(q.transfer_total).toLocaleString('en-IN')}</span> : null}
                     {q.revision_reason ? <span style={{ color: '#64748b' }}> · {q.revision_reason}</span> : null}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
                   <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => openCopyModal(q)}>Copy for Excel</button>
                   {q.status !== 'superseded' && (
                     <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => startRevise(q)}>Revise</button>
@@ -306,8 +314,71 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                   )}
                 </div>
               </div>
+              {open && (
+                <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Quote preview</div>
+                  {(q.validity_date || q.delivery_tat || q.payment_terms) && (
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                      {q.validity_date ? `Validity: ${q.validity_date}` : ''}
+                      {q.delivery_tat ? ` · TAT: ${q.delivery_tat}` : ''}
+                      {q.payment_terms ? ` · Payment: ${q.payment_terms}` : ''}
+                    </div>
+                  )}
+                  <table className="table" style={{ fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>TP path</th>
+                        <th>Qty</th>
+                        <th>Rate ₹</th>
+                        <th>Amount ₹</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groups.map((g, i) => (
+                        <tr key={g.base.id || i}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{g.mergedDescription}</div>
+                            {g.upgrades?.length > 0 && (
+                              <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                                {g.upgrades.map(u => u.product_name).filter(Boolean).join(' + ')}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap', fontSize: 11, color: '#64748b' }}>
+                            Base {Number(g.baseUnitTP || 0).toLocaleString('en-IN')}
+                            {g.unitUpSell ? ` + Up ${Number(g.unitUpSell).toLocaleString('en-IN')}` : ''}
+                            {g.minMarginPct != null ? ` → min ${g.minMarginPct}%` : ''}
+                            {g.markupPct != null ? ` → mk ${g.markupPct}%` : ''}
+                          </td>
+                          <td>{g.qty}</td>
+                          <td>{Number(g.unitCustomer || (g.qty ? g.customerTotal / g.qty : 0)).toLocaleString('en-IN')}</td>
+                          <td style={{ fontWeight: 600 }}>{Number(g.customerTotal || 0).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                      {items.filter(it => it.line_type === 'charge').map(c => (
+                        <tr key={c.id}>
+                          <td>{c.product_name || c.charge_kind || 'Charge'}</td>
+                          <td>—</td>
+                          <td>{c.quantity || 1}</td>
+                          <td>{Number(c.customer_price || 0).toLocaleString('en-IN')}</td>
+                          <td style={{ fontWeight: 600 }}>{(Number(c.quantity || 1) * Number(c.customer_price || 0)).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                      {!groups.length && !items.filter(it => it.line_type === 'charge').length && (
+                        <tr><td colSpan={5} style={{ color: '#64748b' }}>No line items stored on this quote.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 13, marginTop: 8, fontWeight: 600 }}>
+                    Total customer ₹{Number(q.total_value || 0).toLocaleString('en-IN')}
+                    {q.margin_pct != null ? <span style={{ fontWeight: 400, color: '#64748b' }}> · Margin {q.margin_pct}%</span> : null}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
+            )
+          })}
           {!quotes.length && !mode && (
             <div className="empty" style={{ padding: 20 }}>No quotations yet. Create the first quote for this deal.</div>
           )}

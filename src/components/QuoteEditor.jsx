@@ -18,13 +18,14 @@ export function QuoteEditor({
   const mgn = quoteMargin(items)
 
   function upgradesOf(parentId) {
-    return items.filter(it => it.line_type === 'upgrade' && it.parent_id === parentId)
+    return items.filter(it => it.line_type === 'upgrade' && String(it.parent_id) === String(parentId))
   }
 
   function upgradeRow(u) {
     const xfer = lineTransferTotal(u)
     const pct = Number(u.margin_pct || u.min_margin_pct) || 0
-    const extra = Math.round(xfer * pct / 100 * 100) / 100
+    const unitTP = Number(u.transfer_price) || 0
+    const extraPerUnit = Math.round(unitTP * pct / 100 * 100) / 100
     return (
       <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, marginBottom: 8, padding: 8, background: '#f8fafc', borderRadius: 8 }}>
         <div>
@@ -36,7 +37,7 @@ export function QuoteEditor({
           <input className="input" type="number" value={u.quantity ?? 1} onChange={e => setItem(u.id, 'quantity', e.target.value)} />
         </div>
         <div>
-          <MiniLabel>Transfer ₹</MiniLabel>
+          <MiniLabel>Transfer ₹ / unit</MiniLabel>
           <input className="input" type="number" value={u.transfer_price ?? ''} onChange={e => setItem(u.id, 'transfer_price', e.target.value)} />
         </div>
         <div>
@@ -45,8 +46,10 @@ export function QuoteEditor({
             onChange={e => setItem(u.id, 'margin_pct', e.target.value)} placeholder="10" />
         </div>
         <div>
-          <MiniLabel>Extra ₹</MiniLabel>
-          <div style={{ fontSize: 13, paddingTop: 8 }}>{extra ? extra.toLocaleString('en-IN') : '—'}</div>
+          <MiniLabel>Sell / unit ₹</MiniLabel>
+          <div style={{ fontSize: 13, paddingTop: 8, fontWeight: 600 }}>
+            {(unitTP + extraPerUnit).toLocaleString('en-IN')}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
           <button type="button" className="btn" style={{ fontSize: 11 }} onClick={() => removeItem(u.id)}>×</button>
@@ -121,15 +124,23 @@ export function QuoteEditor({
               </div>
               <div>
                 <MiniLabel>Customer rate ₹ / unit</MiniLabel>
-                <input className="input" type="number" value={prod.customer_price ?? ''} onChange={e => setGroupCustomer(prod.id, e.target.value)} />
+                <div style={{ fontSize: 15, fontWeight: 700, paddingTop: 8, color: '#0f172a' }}>
+                  {(g.unitCustomer != null ? g.unitCustomer : (Number(prod.customer_price) || 0)).toLocaleString('en-IN')}
+                </div>
               </div>
               <div>
                 <MiniLabel>Line total ₹</MiniLabel>
-                <div style={{ fontSize: 14, fontWeight: 700, paddingTop: 8 }}>{(g.customerTotal || 0).toLocaleString('en-IN')}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, paddingTop: 8, color: '#065f46' }}>{(g.customerTotal || 0).toLocaleString('en-IN')}</div>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-              Package math: (base TP + upgrade sells) → Min mgn % → % Markup = customer unit. Upgrade is per 1 base unit — qty follows base.
+            <div style={{ fontSize: 12, color: '#334155', marginBottom: 8, background: '#f1f5f9', padding: '8px 10px', borderRadius: 8 }}>
+              <strong>Live package math</strong>
+              {' '}Base TP {Number(g.baseUnitTP || 0).toLocaleString('en-IN')}
+              {g.unitUpSell ? ` + Upgrade sell ${Number(g.unitUpSell).toLocaleString('en-IN')}` : ''}
+              {` = ${Number(g.packageUnitBeforeMin || 0).toLocaleString('en-IN')}`}
+              {g.minMarginPct != null ? ` → Min ${g.minMarginPct}% = ${Number(g.packageUnitAfterMin || 0).toLocaleString('en-IN')}` : ''}
+              {g.markupPct != null ? ` → Markup ${g.markupPct}% = ${Number(g.unitCustomer || 0).toLocaleString('en-IN')}/unit` : ''}
+              {g.qty > 1 ? ` × ${g.qty} = ${Number(g.customerTotal || 0).toLocaleString('en-IN')}` : ''}
             </div>
             {ups.map(upgradeRow)}
             <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => addUpgrade(prod.id)}>+ Sub-item / upgrade</button>

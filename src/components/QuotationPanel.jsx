@@ -3,9 +3,10 @@ import { Badge } from '../ui'
 import {
   emptyItem, emptyUpgrade, emptyCharge, groupRollup, quoteGroups,
   loadQuotesForOpp, saveQuotation, updateQuoteStatus,
-  formatQuoteForExcel, customerQuoteNo, DEFAULT_TAX_PCT,
+  formatQuoteForExcel, customerQuoteNo, openQuotePrintWindow, DEFAULT_TAX_PCT,
 } from '../lib/quotations'
 import { QuoteEditor } from './QuoteEditor'
+import { HEXAGON_LOGO_DATA_URL, HEXAGON_SIGNATURE_DATA_URL, QUOTE_SIGNATORY } from '../lib/brandAssets'
 
 function blankForm() {
   return {
@@ -114,6 +115,17 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     setCopyText(text)
     setShowCopy(true)
     setTimeout(() => { try { copyRef.current?.select() } catch (_) {} }, 50)
+  }
+
+  function exportPdf(q) {
+    const { error: err } = openQuotePrintWindow(q, {
+      companyName: opportunity?.company_name || opportunity?.companies?.name || opportunity?.company?.name || 'Customer',
+      opportunityName: opportunity?.name || opportunity?.title || '',
+      logoDataUrl: HEXAGON_LOGO_DATA_URL,
+      signatureDataUrl: HEXAGON_SIGNATURE_DATA_URL,
+      signatory: QUOTE_SIGNATORY,
+    })
+    if (err) setError(err.message)
   }
 
   function setItem(id, key, val) {
@@ -304,6 +316,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                  <button type="button" className="btn primary" style={{ fontSize: 12 }} onClick={() => exportPdf(q)}>Export PDF</button>
                   <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => openCopyModal(q)}>Copy for Excel</button>
                   {q.status !== 'superseded' && (
                     <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => startRevise(q)}>Revise</button>

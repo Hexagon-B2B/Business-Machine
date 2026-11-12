@@ -300,7 +300,6 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                   <span style={{ marginLeft: 8, fontSize: 12, color: '#2563eb' }}>{open ? 'Hide preview ▲' : 'Preview ▼'}</span>
                   <div style={{ fontSize: 13, marginTop: 4 }}>
                     Customer ₹{(q.total_value || 0).toLocaleString('en-IN')}
-                    {q.transfer_total != null ? <span style={{ color: '#64748b' }}> · Transfer ₹{Number(q.transfer_total).toLocaleString('en-IN')}</span> : null}
                     {q.revision_reason ? <span style={{ color: '#64748b' }}> · {q.revision_reason}</span> : null}
                   </div>
                 </div>
@@ -315,64 +314,199 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                 </div>
               </div>
               {open && (
-                <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Quote preview</div>
-                  {(q.validity_date || q.delivery_tat || q.payment_terms) && (
-                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-                      {q.validity_date ? `Validity: ${q.validity_date}` : ''}
-                      {q.delivery_tat ? ` · TAT: ${q.delivery_tat}` : ''}
-                      {q.payment_terms ? ` · Payment: ${q.payment_terms}` : ''}
+                <div style={{
+                  marginTop: 14,
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 10,
+                  background: '#fff',
+                  boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
+                    color: '#f8fafc',
+                    padding: '18px 22px',
+                  }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.14em', fontWeight: 700, opacity: 0.75, marginBottom: 4 }}>
+                      COMMERCIAL DOCUMENT
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '0.02em' }}>QUOTATION</div>
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 13, opacity: 0.92 }}>
+                      <span><strong style={{ opacity: 0.7, fontWeight: 600 }}>Quote No.</strong> {customerQuoteNo(q)}</span>
+                      <span><strong style={{ opacity: 0.7, fontWeight: 600 }}>Version</strong> {q.version || 1}</span>
+                      <span><strong style={{ opacity: 0.7, fontWeight: 600 }}>Status</strong> {(q.status || 'draft').toUpperCase()}</span>
+                      {q.created_at && (
+                        <span><strong style={{ opacity: 0.7, fontWeight: 600 }}>Dated</strong> {String(q.created_at).slice(0, 10)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                    gap: 0,
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                  }}>
+                    {[
+                      ['Validity', q.validity_date || '—'],
+                      ['Delivery TAT', q.delivery_tat || '—'],
+                      ['Payment terms', q.payment_terms || '—'],
+                      ['Transport', q.transport_terms || '—'],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{ padding: '12px 18px', borderRight: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748b', marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ padding: '16px 18px 8px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#0f172a', marginBottom: 10, borderBottom: '2px solid #0f172a', paddingBottom: 6 }}>
+                      Schedule of items
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f1f5f9' }}>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', width: 44, color: '#475569', fontWeight: 700 }}>SL</th>
+                          <th style={{ textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', color: '#475569', fontWeight: 700 }}>Description</th>
+                          <th style={{ textAlign: 'right', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', width: 72, color: '#475569', fontWeight: 700 }}>Qty</th>
+                          <th style={{ textAlign: 'right', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', width: 110, color: '#475569', fontWeight: 700 }}>Unit rate (₹)</th>
+                          <th style={{ textAlign: 'right', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', width: 120, color: '#475569', fontWeight: 700 }}>Amount (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          let sl = 0
+                          const rows = []
+                          for (const g of groups.filter(x => !x.isOptional)) {
+                            sl += 1
+                            const rate = g.unitCustomer != null
+                              ? g.unitCustomer
+                              : (g.qty ? Math.round((g.customerTotal / g.qty) * 100) / 100 : 0)
+                            rows.push(
+                              <tr key={g.base.id || ('m' + sl)}>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top', color: '#64748b' }}>{sl}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                                  <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>{(g.base.product_name || 'Product').trim()}</div>
+                                  {(g.base.brand || g.base.specification) && (
+                                    <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.45 }}>
+                                      {[g.base.brand, g.base.specification].filter(Boolean).join(' · ')}
+                                    </div>
+                                  )}
+                                  {g.upgrades?.length > 0 && (
+                                    <div style={{ marginTop: 6, fontSize: 12, color: '#334155' }}>
+                                      <span style={{ fontWeight: 700 }}>Includes:</span>{' '}
+                                      {g.upgrades.map(u => (u.product_name || '').trim()).filter(Boolean).join('; ')}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>{g.qty}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top' }}>{Number(rate).toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top', fontWeight: 700 }}>{Number(g.customerTotal || 0).toLocaleString('en-IN')}</td>
+                              </tr>
+                            )
+                          }
+                          const optional = groups.filter(x => x.isOptional)
+                          if (optional.length) {
+                            rows.push(
+                              <tr key="opt-h">
+                                <td colSpan={5} style={{ padding: '14px 8px 6px', fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>
+                                  Optional items
+                                </td>
+                              </tr>
+                            )
+                            for (const g of optional) {
+                              sl += 1
+                              const rate = g.unitCustomer != null
+                                ? g.unitCustomer
+                                : (g.qty ? Math.round((g.customerTotal / g.qty) * 100) / 100 : 0)
+                              rows.push(
+                                <tr key={g.base.id || ('o' + sl)}>
+                                  <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top', color: '#64748b' }}>{sl}</td>
+                                  <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                                    <div style={{ fontWeight: 700 }}>{(g.base.product_name || 'Product').trim()} <span style={{ fontWeight: 600, color: '#b45309', fontSize: 11 }}>(Optional)</span></div>
+                                    {(g.base.brand || g.base.specification) && (
+                                      <div style={{ fontSize: 12, color: '#475569' }}>{[g.base.brand, g.base.specification].filter(Boolean).join(' · ')}</div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top' }}>{g.qty}</td>
+                                  <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top' }}>{Number(rate).toLocaleString('en-IN')}</td>
+                                  <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', verticalAlign: 'top', fontWeight: 700 }}>{Number(g.customerTotal || 0).toLocaleString('en-IN')}</td>
+                                </tr>
+                              )
+                            }
+                          }
+                          for (const c of items.filter(it => it.line_type === 'charge')) {
+                            sl += 1
+                            const amt = (Number(c.quantity) || 1) * (Number(c.customer_price) || 0)
+                            rows.push(
+                              <tr key={c.id}>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>{sl}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', fontWeight: 600 }}>{c.product_name || c.charge_kind || 'Charge'}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>{c.quantity || 1}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>{Number(c.customer_price || 0).toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 8px', borderBottom: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 700 }}>{amt.toLocaleString('en-IN')}</td>
+                              </tr>
+                            )
+                          }
+                          if (!rows.length) {
+                            rows.push(
+                              <tr key="empty">
+                                <td colSpan={5} style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>No line items on this quotation.</td>
+                              </tr>
+                            )
+                          }
+                          return rows
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 18px 18px' }}>
+                    <div style={{ minWidth: 280, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>Subtotal (ex-tax)</span>
+                        <span style={{ fontWeight: 700 }}>₹ {Number(q.total_value || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 14px', background: '#0f172a', color: '#f8fafc', fontSize: 14 }}>
+                        <span style={{ fontWeight: 700 }}>Quoted value</span>
+                        <span style={{ fontWeight: 800 }}>₹ {Number(q.total_value || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {(q.special_terms || q.notes || q.revision_reason) && (
+                    <div style={{ padding: '0 18px 16px', fontSize: 12, color: '#334155', lineHeight: 1.55 }}>
+                      {q.special_terms && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748b', marginBottom: 2 }}>Special terms</div>
+                          <div>{q.special_terms}</div>
+                        </div>
+                      )}
+                      {q.notes && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748b', marginBottom: 2 }}>Notes</div>
+                          <div>{q.notes}</div>
+                        </div>
+                      )}
+                      {q.revision_reason && (
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#64748b', marginBottom: 2 }}>Revision</div>
+                          <div>{q.revision_reason}</div>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <table className="table" style={{ fontSize: 12 }}>
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>TP path</th>
-                        <th>Qty</th>
-                        <th>Rate ₹</th>
-                        <th>Amount ₹</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groups.map((g, i) => (
-                        <tr key={g.base.id || i}>
-                          <td>
-                            <div style={{ fontWeight: 600 }}>{g.mergedDescription}</div>
-                            {g.upgrades?.length > 0 && (
-                              <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
-                                {g.upgrades.map(u => u.product_name).filter(Boolean).join(' + ')}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ whiteSpace: 'nowrap', fontSize: 11, color: '#64748b' }}>
-                            Base {Number(g.baseUnitTP || 0).toLocaleString('en-IN')}
-                            {g.unitUpSell ? ` + Up ${Number(g.unitUpSell).toLocaleString('en-IN')}` : ''}
-                            {g.minMarginPct != null ? ` → min ${g.minMarginPct}%` : ''}
-                            {g.markupPct != null ? ` → mk ${g.markupPct}%` : ''}
-                          </td>
-                          <td>{g.qty}</td>
-                          <td>{Number(g.unitCustomer || (g.qty ? g.customerTotal / g.qty : 0)).toLocaleString('en-IN')}</td>
-                          <td style={{ fontWeight: 600 }}>{Number(g.customerTotal || 0).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
-                      {items.filter(it => it.line_type === 'charge').map(c => (
-                        <tr key={c.id}>
-                          <td>{c.product_name || c.charge_kind || 'Charge'}</td>
-                          <td>—</td>
-                          <td>{c.quantity || 1}</td>
-                          <td>{Number(c.customer_price || 0).toLocaleString('en-IN')}</td>
-                          <td style={{ fontWeight: 600 }}>{(Number(c.quantity || 1) * Number(c.customer_price || 0)).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
-                      {!groups.length && !items.filter(it => it.line_type === 'charge').length && (
-                        <tr><td colSpan={5} style={{ color: '#64748b' }}>No line items stored on this quote.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                  <div style={{ fontSize: 13, marginTop: 8, fontWeight: 600 }}>
-                    Total customer ₹{Number(q.total_value || 0).toLocaleString('en-IN')}
-                    {q.margin_pct != null ? <span style={{ fontWeight: 400, color: '#64748b' }}> · Margin {q.margin_pct}%</span> : null}
+
+                  <div style={{
+                    borderTop: '1px solid #e2e8f0',
+                    padding: '10px 18px',
+                    fontSize: 11,
+                    color: '#94a3b8',
+                    background: '#f8fafc',
+                  }}>
+                    This preview is for internal review and client discussion. Prices are in INR. Tax as applicable will be charged extra unless stated otherwise.
                   </div>
                 </div>
               )}

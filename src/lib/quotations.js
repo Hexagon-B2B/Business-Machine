@@ -48,18 +48,16 @@ export function lineTransferTotal(item) {
 }
 
 export function childUpgrades(items, parentId) {
-  return (items || []).filter(it => it.line_type === 'upgrade' && it.parent_id === parentId)
+  return (items || []).filter(it => it.line_type === 'upgrade' && String(it.parent_id) === String(parentId))
 }
 
 /**
  * Package pricing (per base unit, then × qty):
- * 1) Each upgrade: unitTP × (1 + Std markup %)  → upgrade sell
+ * 1) Upgrade TP is cost per ONE base unit × (1 + Std markup %) → upgrade sell
  * 2) Package = base unit TP + sum(upgrade sells)
- * 3) Min mgn % on package (if set)
- * 4) % Markup on that result (if set) → customer unit rate
+ * 3) Min mgn % on package
+ * 4) % Markup on that → customer unit rate
  * 5) customerTotal = unit rate × base qty
- *
- * Upgrade qty is normally equal to base qty (upgrade is per unit of base product).
  */
 export function groupRollup(base, items) {
   const ups = childUpgrades(items, base.id)
@@ -70,9 +68,8 @@ export function groupRollup(base, items) {
   let unitUpSell = 0
   let upgradeStdExtra = 0
   for (const u of ups) {
-    const uQty = Number(u.quantity) || 0
     const uUnitTP = Number(u.transfer_price ?? u.cost_price) || 0
-    const perBaseUnitTP = qty > 0 ? (uUnitTP * uQty) / qty : 0
+    const perBaseUnitTP = uUnitTP
     unitUpTP += perBaseUnitTP
 
     let std = null
@@ -122,23 +119,20 @@ export function groupRollup(base, items) {
     if (!Number.isNaN(m)) markupPct = m
   }
 
-  // Package unit = base unit TP + upgrade sells (after Std markup)
-  let packageUnit = baseUnitTP + unitUpSell
-  // Min mgn % on (base + upgrade sells)
+  const packageUnitBeforeMin = Math.round((baseUnitTP + unitUpSell) * 100) / 100
+  let packageUnit = packageUnitBeforeMin
   if (minMarginPct != null) {
     packageUnit = packageUnit * (1 + minMarginPct / 100)
   }
-
-  const hasCustomerRate =
-    base.customer_price !== '' && base.customer_price != null && !Number.isNaN(Number(base.customer_price))
+  const packageUnitAfterMin = Math.round(packageUnit * 100) / 100
 
   let unitCustomer
   if (markupPct != null || minMarginPct != null) {
     unitCustomer = markupPct != null ? packageUnit * (1 + markupPct / 100) : packageUnit
-  } else if (hasCustomerRate) {
+  } else if (base.customer_price !== '' && base.customer_price != null && !Number.isNaN(Number(base.customer_price))) {
     unitCustomer = Number(base.customer_price)
   } else {
-    unitCustomer = baseUnitTP + unitUpSell
+    unitCustomer = packageUnitBeforeMin
   }
   unitCustomer = Math.round(unitCustomer * 100) / 100
 
@@ -158,10 +152,15 @@ export function groupRollup(base, items) {
     upgradeStdExtra,
     marginPct: displayMargin != null && !Number.isNaN(displayMargin) ? displayMargin : effectiveMargin,
     minMarginPct,
+    markupPct,
     belowMin,
     mergedDescription,
     qty,
     unitCustomer,
+    packageUnitBeforeMin,
+    packageUnitAfterMin,
+    unitUpSell,
+    baseUnitTP,
     isOptional: (base.optionality || 'mandatory') === 'optional',
   }
 }

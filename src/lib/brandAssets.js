@@ -1,4 +1,4 @@
-/** Brand assets for quotation PDF / print — logo, partner banner, signatory */
+/** Brand assets for quotation PDF / print */
 export const HEXAGON_LOGO_DATA_URL = ''
 export const HEXAGON_SIGNATURE_DATA_URL = ''
 

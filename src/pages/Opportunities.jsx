@@ -128,10 +128,6 @@ export default function Opportunities({ go }) {
     } else {
       const from = (page - 1) * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
-      let q = supabase.from('opportunities')
-        .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)', { count: 'exact' })
-        .neq('state', 'deleted')
-      // UI keys → DB columns. "company" is a join; "value" is computed from quotes/deal_size
       const SORT_MAP = {
         name: 'name',
         stage: 'stage',
@@ -139,19 +135,40 @@ export default function Opportunities({ go }) {
         close: 'expected_close_date',
         created_at: 'created_at',
       }
+
+      // Company is a joined name — server FK order is unreliable; sort A–Z client-side then page.
       if (sortKey === 'company') {
-        q = q.order('name', { ascending: sortDir === 'asc', foreignTable: 'companies', nullsFirst: false })
+        let q = supabase.from('opportunities')
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)', { count: 'exact' })
+          .neq('state', 'deleted')
+        if (stageFilter === 'open') q = q.not('stage', 'in', '(won,lost)')
+        else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
+        else if (stageFilter !== 'all') q = q.eq('stage', stageFilter)
+        const { data, count, error } = await q.limit(3000)
+        if (error) console.error(error)
+        const rows = (data || []).slice()
+        rows.sort((a, b) => {
+          const an = String(a.companies?.name || '').trim()
+          const bn = String(b.companies?.name || '').trim()
+          const cmp = an.localeCompare(bn, undefined, { numeric: true, sensitivity: 'base' })
+          return sortDir === 'asc' ? cmp : -cmp
+        })
+        setItems(rows.slice(from, to + 1))
+        setTotal(count != null ? count : rows.length)
       } else {
+        let q = supabase.from('opportunities')
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)', { count: 'exact' })
+          .neq('state', 'deleted')
+        if (stageFilter === 'open') q = q.not('stage', 'in', '(won,lost)')
+        else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
+        else if (stageFilter !== 'all') q = q.eq('stage', stageFilter)
         q = q.order(SORT_MAP[sortKey] || 'created_at', { ascending: sortDir === 'asc', nullsFirst: false })
+        q = q.range(from, to)
+        const { data, count, error } = await q
+        if (error) console.error(error)
+        setItems(data || [])
+        setTotal(count || 0)
       }
-      q = q.range(from, to)
-      if (stageFilter === 'open') q = q.not('stage', 'in', '(won,lost)')
-      else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
-      else if (stageFilter !== 'all') q = q.eq('stage', stageFilter)
-      const { data, count, error } = await q
-      if (error) console.error(error)
-      setItems(data || [])
-      setTotal(count || 0)
     }
     setLoading(false)
   }

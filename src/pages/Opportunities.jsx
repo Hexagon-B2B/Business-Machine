@@ -14,7 +14,7 @@ import { logActivity } from '../lib/activityLog'
 function stageTone(stage) {
   if (stage === 'won') return 'green'
   if (stage === 'lost') return 'red'
-  if (stage === 'quotation' || stage === 'negotiation' || stage === 'decision') return 'yellow'
+  if (stage === 'quotation' || stage === 'negotiation' || stage === 'approved') return 'yellow'
   return 'blue'
 }
 
@@ -117,7 +117,7 @@ export default function Opportunities({ go }) {
     setLoading(true)
     if (view === 'board') {
       const { data, error } = await supabase.from('opportunities')
-        .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)')
+        .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name, city)')
         .neq('state', 'deleted')
         .not('stage', 'in', '(won,lost)')
         .order('created_at', { ascending: false })
@@ -136,10 +136,9 @@ export default function Opportunities({ go }) {
         created_at: 'created_at',
       }
 
-      // Company is a joined name — server FK order is unreliable; sort A–Z client-side then page.
       if (sortKey === 'company') {
         let q = supabase.from('opportunities')
-          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)', { count: 'exact' })
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name, city)', { count: 'exact' })
           .neq('state', 'deleted')
         if (stageFilter === 'open') q = q.not('stage', 'in', '(won,lost)')
         else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
@@ -157,7 +156,7 @@ export default function Opportunities({ go }) {
         setTotal(count != null ? count : rows.length)
       } else {
         let q = supabase.from('opportunities')
-          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)', { count: 'exact' })
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name, city)', { count: 'exact' })
           .neq('state', 'deleted')
         if (stageFilter === 'open') q = q.not('stage', 'in', '(won,lost)')
         else if (stageFilter === 'closed') q = q.in('stage', ['won', 'lost'])
@@ -184,6 +183,7 @@ export default function Opportunities({ go }) {
     if (saving) return
     if (!form.company_id) { showMsg('Select a company.'); return }
     if (!form.requirement_description.trim()) { showMsg('Requirement is required.'); return }
+    if (!(form.primary_contact_id || '').trim()) { showMsg('Primary contact is required.'); return }
     setSaving(true)
     try {
       const { data, error } = await createOppWithOptionalTask(form, form.company_id)
@@ -195,7 +195,7 @@ export default function Opportunities({ go }) {
       await load()
       if (data?.id) {
         const { data: full } = await supabase.from('opportunities')
-          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name)')
+          .select('id, name, stage, deal_size, currency, expected_close_date, opportunity_code, requirement_description, pain_points, metadata, lost_reason, primary_contact_id, company_id, companies(name, legal_name, city)')
           .eq('id', data.id).single()
         if (full) {
           setOpenQuotes(true)

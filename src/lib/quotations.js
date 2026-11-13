@@ -97,7 +97,7 @@ export function groupRollup(base, items) {
   }
   const mergedDescription =
     ups.length > 0
-      ? `${parts[0]} + ${parts.slice(1).join(' + ')} [incl ${ups.length} upgrade${ups.length > 1 ? 's' : ''}]`
+      ? `${parts[0]} + ${parts.slice(1).join(' + ')} [additional to base: ${ups.length} upgrade${ups.length > 1 ? 's' : ''}]`
       : parts[0]
 
   let minMarginPct = null
@@ -419,15 +419,17 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   const logo = opts.logoDataUrl || ''
   const banner = opts.signatureDataUrl || ''
   const companyName = opts.companyName || 'Customer'
+  const companyCity = opts.companyCity || ''
+  const attentionTo = opts.attentionTo || ''
   const oppName = opts.opportunityName || ''
   const qno = customerQuoteNo(quote)
   const dated = quote.created_at ? String(quote.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10)
   function esc(s) {
     return String(s ?? '')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
   }
   let sl = 0
   let bodyRows = ''
@@ -439,7 +441,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     const ups = (g.upgrades || []).map(u => (u.product_name || '').trim()).filter(Boolean)
     bodyRows += '<tr><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' + esc(name) + '</div>' +
       (spec ? '<div class="pspec">' + esc(spec) + '</div>' : '') +
-      (ups.length ? '<div class="pinc"><strong>Includes:</strong> ' + esc(ups.join('; ')) + '</div>' : '') +
+      (ups.length ? '<div class="pinc"><strong>Additional to base configuration:</strong> ' + esc(ups.join('; ')) + '</div>' : '') +
       '</td><td class="num">' + g.qty + '</td><td class="num">' + Number(rate).toLocaleString('en-IN') +
       '</td><td class="num amt">' + Number(g.customerTotal || 0).toLocaleString('en-IN') + '</td></tr>'
   }
@@ -467,12 +469,13 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   }
   if (!bodyRows) bodyRows = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px">No line items</td></tr>'
   const total = Number(quote.total_value || 0).toLocaleString('en-IN')
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Quotation ' + esc(qno) + '</title><style>' +
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Quotation ' + esc(qno) + '</title><style>' +
     '@page{size:A4;margin:14mm 12mm 16mm 12mm}*{box-sizing:border-box}' +
     'body{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;font-size:12.5px;line-height:1.45;margin:0}' +
     '.doc{max-width:210mm;margin:0 auto}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:14px}' +
-    '.logo{height:42px;width:auto;display:block}' +
+    '.logo-wrap{flex:0 0 auto;max-width:220px;max-height:56px}' +
+    '.logo-wrap img,.logo{max-width:220px;max-height:56px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
     '.doc-title{text-align:right}.doc-title .label{font-size:10px;letter-spacing:.14em;font-weight:700;color:#64748b;text-transform:uppercase}' +
     '.doc-title h1{margin:2px 0 0;font-size:22px;letter-spacing:.04em}' +
     '.meta{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin-bottom:16px}' +
@@ -481,34 +484,36 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.box .v{font-weight:600}' +
     '.terms{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}' +
     '.term{border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px}' +
-    '.term .k{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b}' +
+    '.term .k{font-size:9.5px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.06em}' +
     '.term .v{font-weight:600;margin-top:2px}' +
-    'h2.sec{font-size:11px;letter-spacing:.1em;text-transform:uppercase;border-bottom:2px solid #0f172a;padding-bottom:5px;margin:0 0 8px}' +
-    'table.items{width:100%;border-collapse:collapse;margin-bottom:12px}' +
-    'table.items th{text-align:left;background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:8px 6px;font-size:10.5px;color:#475569;text-transform:uppercase;letter-spacing:.04em}' +
-    'table.items th.r,table.items td.num{text-align:right}' +
-    'table.items td{padding:9px 6px;border-bottom:1px solid #e2e8f0;vertical-align:top}' +
-    'table.items td.sl{width:36px;color:#64748b}.pname{font-weight:700}.pspec{font-size:11px;color:#475569;margin-top:2px}' +
-    '.pinc{font-size:11px;color:#334155;margin-top:4px}.opt{color:#b45309;font-size:10px;font-weight:600}' +
-    'table.items tr.sec td{background:#f8fafc;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;padding-top:12px}' +
-    'table.items td.amt{font-weight:700}' +
-    '.totals{display:flex;justify-content:flex-end;margin:8px 0 18px}' +
-    '.totals table{min-width:260px;border-collapse:collapse}' +
-    '.totals td{padding:7px 10px;border:1px solid #e2e8f0}' +
-    '.totals .lab{color:#64748b;font-weight:600}' +
-    '.totals .grand td{background:#0f172a;color:#f8fafc;font-weight:800;font-size:13px;border-color:#0f172a}' +
-    '.notes{margin-bottom:18px;font-size:11.5px;color:#334155}' +
-    '.notes h3{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 4px}' +
-    '.sign{display:flex;justify-content:space-between;gap:24px;margin-top:28px;page-break-inside:avoid}' +
-    '.sign .lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:28px}' +
-    '.sign .name{font-weight:800;font-size:13px}.sign .meta-line{font-size:11.5px;color:#475569}' +
-    '.banner{margin-top:22px;page-break-inside:avoid}.banner img{width:100%;height:auto;display:block;border-radius:4px}' +
-    '.foot{margin-top:12px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}' +
-    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="doc">' +
-    '<div class="top"><div>' + (logo ? '<img class="logo" src="' + logo + '" alt="Hexagon B2B Solutions"/>' : '<div style="font-weight:800;font-size:18px;color:#1e3a8a">HEXAGON B2B SOLUTIONS</div>') +
+    'h2.sec{font-size:11px;letter-spacing:.1em;text-transform:uppercase;border-bottom:2px solid #0f172a;padding-bottom:6px;margin:18px 0 10px}' +
+    'table.items{width:100%;border-collapse:collapse;font-size:12.5px}' +
+    'table.items th{text-align:left;padding:8px 6px;border-bottom:1px solid #cbd5e1;background:#f1f5f9;font-size:11px;color:#475569}' +
+    'table.items td{padding:10px 6px;border-bottom:1px solid #e2e8f0;vertical-align:top}' +
+    'table.items .sl{width:36px;color:#64748b}' +
+    'table.items .num{text-align:right;white-space:nowrap}' +
+    'table.items .amt{font-weight:600}' +
+    'table.items .pname{font-weight:700}' +
+    'table.items .pspec{color:#475569;font-size:11.5px;margin-top:2px}' +
+    'table.items .pinc{color:#334155;font-size:11.5px;margin-top:4px}' +
+    'table.items .opt{color:#b45309;font-weight:600;font-size:11px}' +
+    'table.items tr.sec td{background:#f8fafc;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b}' +
+    '.totals{margin-top:12px;display:flex;justify-content:flex-end}' +
+    '.totals table{min-width:240px;border-collapse:collapse}' +
+    '.totals td{padding:6px 8px;text-align:right}' +
+    '.totals .grand{background:#0f172a;color:#fff;font-weight:800}' +
+    '.foot{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px}' +
+    '.sign .name{font-weight:800;font-size:13px;margin-top:28px}' +
+    '.muted{color:#64748b;font-size:11px;margin-top:18px;border-top:1px solid #e2e8f0;padding-top:8px}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
+    '</style></head><body><div class="doc">' +
+    '<div class="top"><div>' +
+    (logo ? '<div class="logo-wrap"><img class="logo" src="' + logo + '" alt="Hexagon B2B Solutions"/></div>' : '<div style="font-weight:800;font-size:18px;color:#1e3a8a">HEXAGON B2B SOLUTIONS</div>') +
     '</div><div class="doc-title"><div class="label">Commercial document</div><h1>QUOTATION</h1></div></div>' +
     '<div class="meta"><div class="box"><h3>Prepared for</h3><div class="v">' + esc(companyName) + '</div>' +
-    (oppName ? '<div style="margin-top:4px;color:#475569">' + esc(oppName) + '</div>' : '') +
+    (companyCity ? '<div style="margin-top:2px;color:#475569;font-size:12px">' + esc(companyCity) + '</div>' : '') +
+    (attentionTo ? '<div style="margin-top:6px;font-size:12.5px"><strong>Attn:</strong> ' + esc(attentionTo) + '</div>' : '') +
+    (oppName ? '<div style="margin-top:4px;color:#64748b;font-size:11.5px">Ref: ' + esc(oppName) + '</div>' : '') +
     '</div><div class="box"><h3>Quotation details</h3><div><strong>Quote No.:</strong> ' + esc(qno) +
     '</div><div><strong>Version:</strong> ' + esc(quote.version || 1) +
     '</div><div><strong>Date:</strong> ' + esc(dated) +
@@ -521,28 +526,20 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '<div class="term"><div class="k">Transport</div><div class="v">' + esc(quote.transport_terms || '—') + '</div></div>' +
     '</div>' +
     '<h2 class="sec">Schedule of items</h2>' +
-    '<table class="items"><thead><tr><th style="width:36px">SL</th><th>Description</th><th class="r" style="width:56px">Qty</th><th class="r" style="width:100px">Unit rate (₹)</th><th class="r" style="width:110px">Amount (₹)</th></tr></thead><tbody>' +
-    bodyRows + '</tbody></table>' +
-    '<div class="totals"><table><tr><td class="lab">Subtotal (ex-tax)</td><td class="num"><strong>₹ ' + total +
-    '</strong></td></tr><tr class="grand"><td>Quoted value</td><td class="num">₹ ' + total + '</td></tr></table></div>' +
-    ((quote.special_terms || quote.notes || quote.revision_reason) ? ('<div class="notes">' +
-      (quote.special_terms ? '<h3>Special terms</h3><div>' + esc(quote.special_terms) + '</div>' : '') +
-      (quote.notes ? '<h3 style="margin-top:8px">Notes</h3><div>' + esc(quote.notes) + '</div>' : '') +
-      (quote.revision_reason ? '<h3 style="margin-top:8px">Revision</h3><div>' + esc(quote.revision_reason) + '</div>' : '') +
-      '</div>') : '') +
-    '<div class="sign"><div class="block"><div class="lbl">For ' + esc(companyName) +
-    '</div><div class="meta-line" style="margin-top:36px;color:#94a3b8">Authorised signatory</div></div>' +
-    '<div class="block" style="text-align:right"><div class="lbl">For ' + esc(signatory.company || 'Hexagon B2B Solutions') +
-    '</div><div class="name">' + esc(signatory.name) + '</div><div class="meta-line">' + esc(signatory.title || '') +
-    '</div><div class="meta-line">M: ' + esc(signatory.phone) + '</div><div class="meta-line">' + esc(signatory.email) +
-    '</div></div></div>' +
-    (banner ? '<div class="banner"><img src="' + banner + '" alt="Trusted Technology Partners"/></div>' : '') +
-    '<div class="foot">' + esc(signatory.tagline || '') +
-    '<br/>Prices are in Indian Rupees (INR). Applicable taxes extra unless stated otherwise. This quotation is confidential and intended solely for the addressee.</div>' +
+    '<table class="items"><thead><tr><th style="width:36px">SL</th><th>Description</th><th class="num" style="width:56px">Qty</th><th class="num" style="width:100px">Unit rate (₹)</th><th class="num" style="width:110px">Amount (₹)</th></tr></thead><tbody>' +
+    bodyRows +
+    '</tbody></table>' +
+    '<div class="totals"><table><tr><td>Subtotal (ex-tax)</td><td>₹ ' + total + '</td></tr>' +
+    '<tr class="grand"><td>Quoted value</td><td>₹ ' + total + '</td></tr></table></div>' +
+    (quote.revision_reason ? '<div style="margin-top:14px"><strong>REVISION</strong><div style="color:#475569">' + esc(quote.revision_reason) + '</div></div>' : '') +
+    '<div class="foot"><div><div style="text-transform:uppercase;font-size:10px;letter-spacing:.08em;color:#64748b">For ' + esc(companyName) + '</div><div style="margin-top:36px;color:#94a3b8">Authorised signatory</div></div>' +
+    '<div class="sign" style="text-align:right"><div style="text-transform:uppercase;font-size:10px;letter-spacing:.08em;color:#64748b">For ' + esc(signatory.company || 'Hexagon B2B Solutions') + '</div>' +
+    '<div class="name">' + esc(signatory.name) + '</div><div>' + esc(signatory.title || '') + '</div>' +
+    '<div>M: ' + esc(signatory.phone || '') + '</div><div>' + esc(signatory.email || '') + '</div></div></div>' +
+    '<div class="muted">' + esc(signatory.tagline || '') + '<br/>Prices are in Indian Rupees (INR). Applicable taxes extra unless stated otherwise. This quotation is confidential and intended solely for the addressee.</div>' +
     '</div></body></html>'
 }
 
-/** Print via hidden iframe — no browser pop-up required */
 export function openQuotePrintWindow(quote, opts = {}) {
   const html = formatQuotePrintHtml(quote, opts)
   if (!html) return { error: { message: 'Could not build quotation document.' } }

@@ -10,6 +10,5 @@ export {
   loadQuotesForOpp, saveQuotation, updateQuoteStatus, formatQuoteForExcel,
 } from './quotationStore'
 
-export {
-  formatQuotePrintHtml, downloadQuotePdf, openQuotePrintWindow,
-} from './quotationPrint'
+export { formatQuotePrintHtml } from './quotationPrintHtml'
+export { downloadQuotePdf, openQuotePrintWindow } from './quotationDownload'

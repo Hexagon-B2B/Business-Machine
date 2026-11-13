@@ -6,7 +6,7 @@ import {
   formatQuoteForExcel, customerQuoteNo, downloadQuotePdf, openQuotePrintWindow, DEFAULT_TAX_PCT,
 } from '../lib/quotations'
 import { QuoteEditor } from './QuoteEditor'
-import { HEXAGON_LOGO_DATA_URL, HEXAGON_SIGNATURE_DATA_URL, QUOTE_SIGNATORY } from '../lib/brandAssets'
+import { HEXAGON_LOGO_DATA_URL, HEXAGON_PARTNERS_DATA_URL, HEXAGON_SIGNATURE_DATA_URL, QUOTE_SIGNATORY } from '../lib/brandAssets'
 
 function blankForm() {
   return {
@@ -14,6 +14,7 @@ function blankForm() {
     delivery_tat: '',
     payment_terms: '',
     transport_terms: '',
+    delivery_location: '',
     special_terms: '',
     revision_reason: '',
     no_regret_price: false,
@@ -95,6 +96,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       delivery_tat: q.delivery_tat || '',
       payment_terms: q.payment_terms || '',
       transport_terms: q.transport_terms || '',
+      delivery_location: q.delivery_location || '',
       special_terms: q.special_terms || '',
       revision_reason: 'Revised pricing / scope',
       no_regret_price: !!q.no_regret_price,
@@ -143,8 +145,10 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
         attentionTo: String(attention || '').trim(),
         opportunityName: opportunity?.name || opportunity?.title || '',
         logoDataUrl: HEXAGON_LOGO_DATA_URL,
+        partnersDataUrl: HEXAGON_PARTNERS_DATA_URL,
         signatureDataUrl: HEXAGON_SIGNATURE_DATA_URL,
         signatory: QUOTE_SIGNATORY,
+        deliveryLocation: q.delivery_location || '',
       })
       if (err) {
         setOk('')
@@ -267,6 +271,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
         delivery_tat: form.delivery_tat,
         payment_terms: form.payment_terms,
         transport_terms: form.transport_terms,
+        delivery_location: form.delivery_location,
         special_terms: form.special_terms,
         revision_reason: isRevise ? (form.revision_reason || '').trim() : (form.revision_reason || null),
         no_regret_price: form.no_regret_price,
@@ -380,7 +385,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                       )}
                     </div>
                   </div>
-                  <div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Preview — use Export PDF for full document with legal name, city and Kind Attention.</div>
+                  <div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Preview — use Export PDF for full document.</div>
                 </div>
               )}
             </div>

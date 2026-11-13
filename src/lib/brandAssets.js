@@ -1,6 +1,6 @@
 /** Brand assets for quotation PDF / print */
-export const HEXAGON_LOGO_DATA_URL = 'data:image/jpeg;base64,TEMP'
-export const HEXAGON_PARTNERS_DATA_URL = 'data:image/jpeg;base64,TEMP'
+export { HEXAGON_LOGO_DATA_URL } from './brandLogo'
+export { HEXAGON_PARTNERS_DATA_URL } from './brandPartners'
 export const HEXAGON_SIGNATURE_DATA_URL = ''
 
 export const QUOTE_SIGNATORY = {

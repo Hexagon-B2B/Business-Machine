@@ -365,7 +365,11 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   const qno = customerQuoteNo(quote)
   const dated = quote.created_at ? String(quote.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10)
   function esc(s) {
-    return String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
+    return String(s ?? '')
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
   }
   let sl = 0
   let bodyRows = ''
@@ -407,7 +411,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   const total = Number(quote.total_value || 0).toLocaleString('en-IN')
   return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Quotation ' + esc(qno) + '</title><style>' +
     '@page{size:A4;margin:14mm 12mm 16mm 12mm}*{box-sizing:border-box}' +
-    'body{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;font-size:12.5px;line-height:1.45;margin:0}' +
+    'body{font-family:Segoe UI,system-ui,sans-serif;color:#0f172a;font-size:12.5px;line-height:1.45;margin:0;padding:12px}' +
     '.doc{max-width:210mm;margin:0 auto}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:14px}' +
     '.logo-wrap{flex:0 0 auto;max-width:220px;max-height:56px}' +
@@ -422,21 +426,21 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.term{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px}.term label{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b}' +
     'table{width:100%;border-collapse:collapse;margin-top:6px}th{background:#f1f5f9;text-align:left;padding:8px;font-size:11px;border-bottom:1px solid #cbd5e1}' +
     'td{padding:10px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top}.sl{width:36px;color:#64748b}.num{text-align:right;white-space:nowrap}.amt{font-weight:600}' +
-    '.pname{font-weight:600}.pspec{font-size:11.5px;color:#475569;margin-top:2px}.pinc{font-size:11px;color:#64748b;margin-top:4px}.opt{color:#b45309;font-weight:600}' +
-    '.sec td{background:#f8fafc;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em}' +
-    '.totals{margin-top:12px;margin-left:auto;width:280px}.totals div{display:flex;justify-content:space-between;padding:6px 0}.totals .grand{background:#0f172a;color:#fff;padding:10px 12px;border-radius:8px;font-weight:700;margin-top:6px}' +
-    '.foot{margin-top:28px;display:flex;justify-content:space-between;gap:24px;font-size:12px}.sig{text-align:right}.muted{color:#94a3b8;font-size:11px;margin-top:20px}' +
+    '.pname{font-weight:600}.pspec{font-size:11.5px;color:#475569;margin-top:2px}.pinc{font-size:11px;color:#64748b;margin-top:4px}' +
+    '.sec td{background:#f8fafc;font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#475569}' +
+    '.opt{font-size:11px;color:#b45309;font-weight:600}' +
+    '.totals{margin-top:16px;margin-left:auto;width:280px}.totals div{display:flex;justify-content:space-between;padding:4px 0}.totals .grand{font-weight:800;font-size:15px;border-top:2px solid #0f172a;margin-top:6px;padding-top:8px}' +
+    '.foot{display:flex;justify-content:space-between;margin-top:28px;gap:24px}.sig{text-align:right}.muted{color:#64748b;font-size:11.5px;margin-top:10px}' +
     '</style></head><body><div class="doc">' +
     '<div class="top"><div>' + (logo ? '<div class="logo-wrap"><img class="logo" src="' + logo + '" alt="Hexagon B2B Solutions"/></div>' : '<div style="font-weight:800;font-size:18px;color:#1e3a8a">HEXAGON B2B SOLUTIONS</div>') +
-    '</div><div class="doc-title"><div class="label">Commercial document</div><h1>QUOTATION</h1></div></div>' +
+    '</div><div class="doc-title"><div class="label">Commercial document</div><h1>QUOTATION</h1><div style="margin-top:6px;font-size:12px;color:#475569">Dated ' + esc(dated) + '</div></div></div>' +
     '<div class="meta"><div class="box"><h3>Prepared for</h3><div class="v">' + esc(companyName) + '</div>' +
     (companyCity ? '<div style="margin-top:2px;color:#475569;font-size:12px">' + esc(companyCity) + '</div>' : '') +
     (attentionTo ? '<div style="margin-top:6px;font-size:12.5px"><strong>Kind Attention to:</strong> ' + esc(attentionTo) + '</div>' : '') +
     (oppName ? '<div style="margin-top:4px;color:#64748b;font-size:11.5px">Ref: ' + esc(oppName) + '</div>' : '') +
     '</div><div class="box"><h3>Quotation details</h3><div><strong>Quote No.:</strong> ' + esc(qno) +
     '</div><div><strong>Version:</strong> ' + esc(quote.version || 1) +
-    '</div><div><strong>Date:</strong> ' + esc(dated) +
-    '</div><div><strong>Status:</strong> ' + esc(String(quote.status || 'draft').toUpperCase()) + '</div></div></div>' +
+    '</div><div><strong>Status:</strong> ' + esc((quote.status || 'draft').toUpperCase()) + '</div></div></div>' +
     '<div class="terms">' +
     '<div class="term"><label>Validity</label>' + esc(quote.validity_date || '—') + '</div>' +
     '<div class="term"><label>Delivery TAT</label>' + esc(quote.delivery_tat || '—') + '</div>' +
@@ -455,27 +459,123 @@ export function formatQuotePrintHtml(quote, opts = {}) {
 }
 
 export function openQuotePrintWindow(quote, opts = {}) {
+  return downloadQuotePdf(quote, opts)
+}
+
+/** Build quotation HTML → canvas → real PDF download. No popup. */
+export async function downloadQuotePdf(quote, opts = {}) {
+  const html = formatQuotePrintHtml(quote, opts)
+  if (!html) return { error: { message: 'Could not build quotation document.' } }
+  const qno = customerQuoteNo(quote) || 'quotation'
+  const safeName = String(qno).replace(/[^\w.\-]+/g, '_') + '.pdf'
+
   try {
-    const html = formatQuotePrintHtml(quote, opts)
-    const w = window.open('', '_blank', 'noopener,noreferrer')
-    if (!w) return { error: { message: 'Popup blocked — allow popups for this site to Export PDF.' } }
-    w.document.open()
-    w.document.write(html)
-    w.document.close()
-    const doPrint = () => { try { w.focus(); w.print() } catch (_) {} }
-    const logo = opts.logoDataUrl
-    if (logo) {
-      const img = new w.Image()
-      img.src = logo
-      const done = () => setTimeout(doPrint, 400)
-      if (img.complete) done()
-      else { img.onload = done; img.onerror = done }
-      setTimeout(doPrint, 2000)
-    } else {
-      setTimeout(doPrint, 300)
+    const host = document.createElement('div')
+    host.id = 'hexagon-quote-pdf-host'
+    host.setAttribute('aria-hidden', 'true')
+    host.style.cssText =
+      'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;pointer-events:none;opacity:0;'
+    document.body.appendChild(host)
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'width:794px;height:1123px;border:0;'
+    host.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    await new Promise((resolve) => {
+      const imgs = Array.from(doc.images || [])
+      if (!imgs.length) {
+        setTimeout(resolve, 200)
+        return
+      }
+      let left = imgs.length
+      const done = () => {
+        left -= 1
+        if (left <= 0) setTimeout(resolve, 150)
+      }
+      imgs.forEach((img) => {
+        if (img.complete) done()
+        else {
+          img.onload = done
+          img.onerror = done
+        }
+      })
+      setTimeout(resolve, 2500)
+    })
+
+    if (!window.__hexagonPdfLibs) {
+      const [hcMod, jpMod] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/+esm'),
+        import('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm'),
+      ])
+      window.__hexagonPdfLibs = {
+        html2canvas: hcMod.default || hcMod,
+        jsPDF: jpMod.jsPDF || jpMod.default?.jsPDF || jpMod.default,
+      }
     }
+    const { html2canvas, jsPDF } = window.__hexagonPdfLibs
+    if (!html2canvas || !jsPDF) throw new Error('PDF libraries failed to load')
+
+    const canvas = await html2canvas(doc.body, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: 794,
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const imgW = pageW
+    const imgH = (canvas.height * imgW) / canvas.width
+    let heightLeft = imgH
+    let position = 0
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH)
+    heightLeft -= pageH
+    while (heightLeft > 0.5) {
+      position = heightLeft - imgH
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH)
+      heightLeft -= pageH
+    }
+
+    pdf.save(safeName)
+    try { host.remove() } catch (_) {}
     return { error: null }
   } catch (e) {
-    return { error: { message: e.message || 'Print failed. Try again or use Copy for Excel.' } }
+    try {
+      const existing = document.getElementById('hexagon-quote-print-frame')
+      if (existing) existing.remove()
+      const iframe = document.createElement('iframe')
+      iframe.id = 'hexagon-quote-print-frame'
+      iframe.setAttribute('title', 'Quotation print')
+      iframe.style.cssText =
+        'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;'
+      document.body.appendChild(iframe)
+      const doc = iframe.contentDocument || iframe.contentWindow.document
+      doc.open()
+      doc.write(html)
+      doc.close()
+      await new Promise((r) => setTimeout(r, 400))
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      return { error: null }
+    } catch (e2) {
+      return {
+        error: {
+          message:
+            (e && e.message) ||
+            (e2 && e2.message) ||
+            'PDF download failed. Allow downloads for this site, or use Copy for Excel.',
+        },
+      }
+    }
   }
 }

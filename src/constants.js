@@ -57,23 +57,33 @@ export const RESEARCH_STATUS = ['NOT_RESEARCHED', 'IN_PROGRESS', 'RESEARCHED', '
 export const ROLES = ['Decision Maker', 'Procurement', 'IT', 'Finance', 'Technical Evaluator', 'Influencer', 'End User', 'Other']
 
 /** Opportunity stages — buyer progress */
-export const OPP_STAGES = ['requirement', 'qualification', 'discovery', 'solution', 'quotation', 'negotiation', 'decision', 'won', 'lost']
+export const OPP_STAGES = ['requirement', 'qualified', 'discovery', 'quotation', 'negotiation', 'approved', 'won', 'lost']
 export const OPP_STAGE_META = {
-  requirement:   { label: 'Requirement',   short: 'Req' },
-  qualification: { label: 'Qualification', short: 'Qual' },
-  discovery:     { label: 'Discovery',     short: 'Disc' },
-  solution:      { label: 'Solution',      short: 'Sol' },
-  quotation:     { label: 'Quotation',     short: 'Quote' },
-  negotiation:   { label: 'Negotiation',   short: 'Neg' },
-  decision:      { label: 'Decision',      short: 'Dec' },
-  won:           { label: 'Won',           short: 'Won' },
-  lost:          { label: 'Lost',          short: 'Lost' },
+  requirement:   { label: 'Requirement', short: 'Req', hint: 'Initial requirement entered' },
+  qualified:     { label: 'Qualified', short: 'Qual', hint: 'First interaction has started' },
+  discovery:     { label: 'Discovery', short: 'Disc', hint: 'Taking / thinking of options' },
+  quotation:     { label: 'Quotation', short: 'Quote', hint: 'Quotation sent' },
+  negotiation:   { label: 'Negotiation', short: 'Neg', hint: 'Target price or final offer' },
+  approved:      { label: 'Approved', short: 'Appr', hint: 'Dispatched on DC' },
+  won:           { label: 'Won', short: 'Won', hint: 'Dispatched on Invoice' },
+  lost:          { label: 'Lost', short: 'Lost', hint: 'Deal lost' },
+  // legacy aliases (old data)
+  qualification: { label: 'Qualified', short: 'Qual', hint: 'First interaction has started' },
+  solution:      { label: 'Discovery', short: 'Disc' },
+  decision:      { label: 'Negotiation', short: 'Neg' },
+}
+export function normalizeOppStage(s) {
+  if (s === 'qualification') return 'qualified'
+  if (s === 'solution') return 'discovery'
+  if (s === 'decision') return 'negotiation'
+  return s
 }
 export function oppStageLabel(s) {
   return OPP_STAGE_META[s]?.label || s || '—'
 }
 export function isOppOpen(stage) {
-  return stage && stage !== 'won' && stage !== 'lost'
+  const s = normalizeOppStage(stage)
+  return s && s !== 'won' && s !== 'lost'
 }
 
 export const TASK_STATUS = ['open', 'in_progress', 'completed', 'cancelled']

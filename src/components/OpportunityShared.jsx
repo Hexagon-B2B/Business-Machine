@@ -73,6 +73,8 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
   const [showQuote, setShowQuote] = useState(true)
+  const [dispatchForm, setDispatchForm] = useState({ label: '', location: '', qty_note: '', invoice_no: '', transport_cost: '', other_cost: '', notes: '' })
+  const [dispatchBusy, setDispatchBusy] = useState(false)
   useEffect(() => {
     if (!opportunity) { setRow(null); return }
     setRow({
@@ -107,6 +109,43 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
     setSaving(false)
     if (error) { setFlash('Save failed: ' + error.message); return }
     setFlash('Deal details saved.')
+    onSaved && onSaved({ keepOpen: true })
+  }
+  async function addDispatch(e) {
+    e.preventDefault()
+    if (!row?.id || dispatchBusy) return
+    if (!(dispatchForm.label || '').trim()) { setFlash('Dispatch label is required.'); return }
+    setDispatchBusy(true)
+    const list = Array.isArray(row.metadata?.dispatches) ? row.metadata.dispatches.slice() : []
+    const entry = {
+      id: 'd_' + Date.now().toString(36),
+      label: dispatchForm.label.trim(),
+      location: (dispatchForm.location || '').trim(),
+      qty_note: (dispatchForm.qty_note || '').trim(),
+      invoice_no: (dispatchForm.invoice_no || '').trim(),
+      transport_cost: dispatchForm.transport_cost !== '' ? Number(dispatchForm.transport_cost) : null,
+      other_cost: dispatchForm.other_cost !== '' ? Number(dispatchForm.other_cost) : null,
+      notes: (dispatchForm.notes || '').trim(),
+      created_at: new Date().toISOString(),
+    }
+    list.push(entry)
+    const meta = { ...(row.metadata || {}), dispatches: list }
+    const { error } = await supabase.from('opportunities').update({ metadata: meta }).eq('id', row.id)
+    setDispatchBusy(false)
+    if (error) { setFlash('Dispatch save failed: ' + error.message); return }
+    setRow({ ...row, metadata: meta })
+    setDispatchForm({ label: '', location: '', qty_note: '', invoice_no: '', transport_cost: '', other_cost: '', notes: '' })
+    setFlash('Dispatch / invoice split saved.')
+    onSaved && onSaved({ keepOpen: true })
+  }
+  async function removeDispatch(id) {
+    if (!row?.id) return
+    const list = (row.metadata?.dispatches || []).filter(d => d.id !== id)
+    const meta = { ...(row.metadata || {}), dispatches: list }
+    const { error } = await supabase.from('opportunities').update({ metadata: meta }).eq('id', row.id)
+    if (error) { setFlash('Remove failed: ' + error.message); return }
+    setRow({ ...row, metadata: meta })
+    setFlash('Dispatch removed.')
     onSaved && onSaved({ keepOpen: true })
   }
   if (!row) return null
@@ -144,6 +183,59 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
         </div>
         <Actions saving={saving} onCancel={onClose} label="Save deal details" />
       </form>
+
+      {row.stage === 'won' && (
+        <div style={{ marginTop: 16, padding: 14, border: '1px solid #bbf7d0', borderRadius: 10, background: '#f0fdf4' }}>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>Dispatch & invoices (Won)</div>
+          <div style={{ fontSize: 12, color: '#166534', marginBottom: 10 }}>
+            Split quantity across locations or staggered invoices. Record transport / extra costs per split.
+          </div>
+          {(row.metadata?.dispatches || []).length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12, background: '#fff', borderRadius: 8 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: 6, borderBottom: '1px solid #e2e8f0' }}>Label</th>
+                  <th style={{ textAlign: 'left', padding: 6, borderBottom: '1px solid #e2e8f0' }}>Location</th>
+                  <th style={{ textAlign: 'left', padding: 6, borderBottom: '1px solid #e2e8f0' }}>Qty / split note</th>
+                  <th style={{ textAlign: 'left', padding: 6, borderBottom: '1px solid #e2e8f0' }}>Invoice #</th>
+                  <th style={{ textAlign: 'right', padding: 6, borderBottom: '1px solid #e2e8f0' }}>Costs</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {(row.metadata?.dispatches || []).map(d => (
+                  <tr key={d.id}>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{d.label}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>{d.location || '—'}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>{d.qty_note || '—'}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>{d.invoice_no || '—'}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
+                      {[d.transport_cost != null ? `T ₹${Number(d.transport_cost).toLocaleString('en-IN')}` : null,
+                        d.other_cost != null ? `O ₹${Number(d.other_cost).toLocaleString('en-IN')}` : null].filter(Boolean).join(' · ') || '—'}
+                    </td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>
+                      <button type="button" className="btn" style={{ fontSize: 11 }} onClick={() => removeDispatch(d.id)}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <form onSubmit={addDispatch}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 8 }}>
+              <Field label="Split label *"><input className="input" value={dispatchForm.label} onChange={e => setDispatchForm(f => ({ ...f, label: e.target.value }))} placeholder="Invoice 1 / Site A" /></Field>
+              <Field label="Location"><input className="input" value={dispatchForm.location} onChange={e => setDispatchForm(f => ({ ...f, location: e.target.value }))} placeholder="City / site" /></Field>
+              <Field label="Qty / split note"><input className="input" value={dispatchForm.qty_note} onChange={e => setDispatchForm(f => ({ ...f, qty_note: e.target.value }))} placeholder="e.g. 12 of 20 units" /></Field>
+              <Field label="Invoice no"><input className="input" value={dispatchForm.invoice_no} onChange={e => setDispatchForm(f => ({ ...f, invoice_no: e.target.value }))} /></Field>
+              <Field label="Transport cost ₹"><input className="input" type="number" value={dispatchForm.transport_cost} onChange={e => setDispatchForm(f => ({ ...f, transport_cost: e.target.value }))} /></Field>
+              <Field label="Other cost ₹"><input className="input" type="number" value={dispatchForm.other_cost} onChange={e => setDispatchForm(f => ({ ...f, other_cost: e.target.value }))} /></Field>
+            </div>
+            <Field label="Notes"><input className="input" value={dispatchForm.notes} onChange={e => setDispatchForm(f => ({ ...f, notes: e.target.value }))} /></Field>
+            <button type="submit" className="btn primary" disabled={dispatchBusy}>{dispatchBusy ? 'Saving…' : '+ Add dispatch / invoice split'}</button>
+          </form>
+        </div>
+      )}
+
       {showQuote && (
         <div style={{ marginTop: 16, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>2. Quotations</div>

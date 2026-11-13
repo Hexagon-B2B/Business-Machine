@@ -3,7 +3,7 @@ import { Badge } from '../ui'
 import {
   emptyItem, emptyUpgrade, emptyCharge, groupRollup, quoteGroups,
   loadQuotesForOpp, saveQuotation, updateQuoteStatus,
-  formatQuoteForExcel, customerQuoteNo, openQuotePrintWindow, DEFAULT_TAX_PCT,
+  formatQuoteForExcel, customerQuoteNo, downloadQuotePdf, openQuotePrintWindow, DEFAULT_TAX_PCT,
 } from '../lib/quotations'
 import { QuoteEditor } from './QuoteEditor'
 import { HEXAGON_LOGO_DATA_URL, HEXAGON_SIGNATURE_DATA_URL, QUOTE_SIGNATORY } from '../lib/brandAssets'
@@ -117,7 +117,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     setTimeout(() => { try { copyRef.current?.select() } catch (_) {} }, 50)
   }
 
-  function exportPdf(q) {
+  async function exportPdf(q) {
     const co = opportunity?.companies || opportunity?.company || {}
     const legal =
       co.legal_name ||
@@ -125,6 +125,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       co.name ||
       opportunity?.company_name ||
       opportunity?.companies?.name ||
+      opportunity?.company?.name ||
       'Customer'
     const city = co.city || opportunity?.city || ''
     const contacts = opportunity?._contacts || opportunity?.contacts || []
@@ -133,16 +134,29 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       const ct = contacts.find(c => String(c.id) === String(opportunity.primary_contact_id))
       attention = ct?.full_name || ''
     }
-    const { error: err } = openQuotePrintWindow(q, {
-      companyName: String(legal).trim() || 'Customer',
-      companyCity: String(city || '').trim(),
-      attentionTo: String(attention || '').trim(),
-      opportunityName: opportunity?.name || opportunity?.title || '',
-      logoDataUrl: HEXAGON_LOGO_DATA_URL,
-      signatureDataUrl: HEXAGON_SIGNATURE_DATA_URL,
-      signatory: QUOTE_SIGNATORY,
-    })
-    if (err) setError(err.message)
+    setError('')
+    setOk('Preparing PDF…')
+    try {
+      const { error: err } = await downloadQuotePdf(q, {
+        companyName: String(legal).trim() || 'Customer',
+        companyCity: String(city || '').trim(),
+        attentionTo: String(attention || '').trim(),
+        opportunityName: opportunity?.name || opportunity?.title || '',
+        logoDataUrl: HEXAGON_LOGO_DATA_URL,
+        signatureDataUrl: HEXAGON_SIGNATURE_DATA_URL,
+        signatory: QUOTE_SIGNATORY,
+      })
+      if (err) {
+        setOk('')
+        setError(err.message)
+      } else {
+        setOk('PDF downloaded')
+        setTimeout(() => setOk(''), 2500)
+      }
+    } catch (ex) {
+      setOk('')
+      setError(ex.message || 'PDF download failed')
+    }
   }
 
   function setItem(id, key, val) {

@@ -1,1 +1,1 @@
-PLACEHOLDER
+{{file:/tmp/push_src_lib_brandLogo.js}}

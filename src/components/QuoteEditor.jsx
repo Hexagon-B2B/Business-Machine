@@ -65,10 +65,10 @@ export function QuoteEditor({
     return (
       <div key={u.id} style={{
         display: 'grid', gridTemplateColumns: '28px 1.4fr 1fr 0.7fr 0.9fr 0.8fr 0.9fr 36px',
-        gap: 8, alignItems: 'end', marginBottom: 8, padding: '10px 10px',
+        gap: 8, alignItems: 'end', marginBottom: 6, padding: '8px 8px',
         background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8,
       }}>
-        <div style={{ fontSize: 11, color: '#94a3b8', paddingBottom: 10 }}>U{idx + 1}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', paddingBottom: 8 }}>U{idx + 1}</div>
         <div>
           <MiniLabel>Upgrade / sub-item (additional to base)</MiniLabel>
           <input className="input" value={u.product_name || ''} onChange={e => setItem(u.id, 'product_name', e.target.value)} placeholder="e.g. +16GB DDR5 RAM (additional)" />
@@ -101,8 +101,8 @@ export function QuoteEditor({
   }
 
   return (
-    <div className="card" style={{ marginBottom: 16, padding: 20, maxWidth: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+    <div className="card" style={{ marginBottom: 16, padding: 14, maxWidth: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>
           {mode === 'revise' ? `Revise ${baseQuote?.quotation_no || ''} → next version` : 'New quotation'}
         </div>
@@ -112,13 +112,13 @@ export function QuoteEditor({
       </div>
 
       {mode === 'revise' && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 12 }}>
           <MiniLabel>Revision reason * (required to save)</MiniLabel>
           <input className="input" value={form.revision_reason || ''} onChange={e => setForm(f => ({ ...f, revision_reason: e.target.value }))} placeholder="What changed?" />
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
         <div>
           <MiniLabel>Validity date</MiniLabel>
           <input className="input" type="date" value={form.validity_date || ''} onChange={e => setForm(f => ({ ...f, validity_date: e.target.value }))} />
@@ -150,8 +150,8 @@ export function QuoteEditor({
         const ups = upgradesOf(prod.id)
         const unitRate = g.unitCustomer != null ? g.unitCustomer : 0
         return (
-          <div key={prod.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 14, background: '#fff' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div key={prod.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, marginBottom: 10, background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>Line {pIdx + 1} · Base product</div>
               <button type="button" className="btn" style={{ fontSize: 12, color: '#991b1b', borderColor: '#fecaca' }}
                 onClick={() => removeItem(prod.id)} title="Remove this base product and all its upgrades">
@@ -159,7 +159,7 @@ export function QuoteEditor({
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1.6fr 1.4fr', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1.5fr 1.3fr', gap: 8, marginBottom: 8 }}>
               <div>
                 <MiniLabel>SL</MiniLabel>
                 <div style={{ fontWeight: 700, paddingTop: 8 }}>{pIdx + 1}</div>
@@ -187,13 +187,19 @@ export function QuoteEditor({
               </div>
             </div>
 
-            <div style={{ marginBottom: 10 }}>
-              <MiniLabel>Description / specification (plain line or bullets)</MiniLabel>
-              <textarea className="input" rows={3} value={prod.specification || ''} onChange={e => setItem(prod.id, 'specification', e.target.value)}
-                placeholder={'Processor, display, memory…\n• Bullet points also fine'} style={{ lineHeight: 1.45 }} />
+            <div style={{ marginBottom: 8 }}>
+              <MiniLabel>Description / specification</MiniLabel>
+              <textarea
+                className="input"
+                rows={2}
+                value={prod.specification || ''}
+                onChange={e => setItem(prod.id, 'specification', e.target.value)}
+                placeholder="Spec / bullets — expand if needed"
+                style={{ lineHeight: 1.35, minHeight: 40, maxHeight: 72, resize: 'vertical' }}
+              />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 8 }}>
               <div>
                 <MiniLabel>Qty (base units)</MiniLabel>
                 <input className="input" type="number" value={prod.quantity ?? 1} onChange={e => setItem(prod.id, 'quantity', e.target.value)} />
@@ -221,20 +227,20 @@ export function QuoteEditor({
             </div>
 
             {ups.length > 0 && (
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>
                 Upgrades are <strong>additional</strong> to the base configuration (e.g. base 16GB + upgrade +16GB → 32GB configured).
               </div>
             )}
             {ups.map((u, i) => upgradeRow(u, i))}
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
               <button type="button" className="btn" style={{ fontSize: 12 }} onClick={() => addUpgrade(prod.id)}>+ Sub-item / upgrade</button>
             </div>
           </div>
         )
       })}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button type="button" className="btn primary" onClick={addProduct}>+ Base product</button>
         <button type="button" className="btn" onClick={() => addCharge('other')}>+ Charge / other</button>
       </div>
@@ -242,7 +248,7 @@ export function QuoteEditor({
       {charges.map(c => (
         <div key={c.id} style={{
           display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.7fr 0.9fr 0.9fr 36px',
-          gap: 10, marginBottom: 10, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, alignItems: 'end',
+          gap: 8, marginBottom: 8, padding: 10, border: '1px solid #e2e8f0', borderRadius: 10, alignItems: 'end',
         }}>
           <div>
             <MiniLabel>{c.charge_kind === 'transport' ? 'Transport detail' : 'Charge name'}</MiniLabel>
@@ -270,7 +276,7 @@ export function QuoteEditor({
         </div>
       ))}
 
-      <div style={{ marginBottom: 14, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ marginBottom: 12, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
         <button type="button" className="btn" style={{ width: '100%', textAlign: 'left', borderRadius: 0, border: 0 }}
           onClick={() => setShowRates(s => !s)}>
           {showRates ? '▼' : '▶'} Past unit rates (1 unit · product + upgrades · TP · rate · company)
@@ -310,8 +316,8 @@ export function QuoteEditor({
       </div>
 
       <div style={{
-        position: 'sticky', bottom: 0, fontSize: 13, padding: '12px 14px', background: '#f1f5f9',
-        borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 14,
+        position: 'sticky', bottom: 0, fontSize: 13, padding: '10px 12px', background: '#f1f5f9',
+        borderRadius: 10, border: '1px solid #e2e8f0', marginBottom: 12,
         display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center',
       }}>
         <div><strong>Quotation summary</strong><span style={{ color: '#64748b' }}> · updates as you type</span></div>

@@ -62,7 +62,12 @@ export function OpportunityCreateFields({ form, setForm, contacts = [] }) {
         <Field label="Next action due"><input className="input" type="date" value={form.next_action_due} onChange={e => setForm({ ...form, next_action_due: e.target.value })} /></Field>
       </div>
       <Field label="Next action"><input className="input" value={form.next_action} onChange={e => setForm({ ...form, next_action: e.target.value })} /></Field>
-      <Field label="Primary contact"><select className="input" value={form.primary_contact_id} onChange={e => setForm({ ...form, primary_contact_id: e.target.value })}><option value="">—</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></Field>
+      <Field label="Primary contact *">
+        <select className="input" required value={form.primary_contact_id} onChange={e => setForm({ ...form, primary_contact_id: e.target.value })}>
+          <option value="">— Select primary contact —</option>
+          {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+        </select>
+      </Field>
       <FirstQuoteFields />
     </>
   )
@@ -81,21 +86,42 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
 
   useEffect(() => {
     if (!opportunity) { setRow(null); return }
-    setRow({
-      ...opportunity,
-      stage: normalizeOppStage(opportunity.stage) || opportunity.stage,
-      solution: opportunity.pain_points || opportunity.metadata?.solution || '',
-      next_action: opportunity.metadata?.next_action || '',
-      next_action_due: String(opportunity.metadata?.next_action_due || '').slice(0, 10),
-      lost_reason: opportunity.lost_reason || '',
-      expected_close_date: String(opportunity.expected_close_date || '').slice(0, 10),
-    })
-    setShowQuote(true)
+    let cancelled = false
+    async function hydrate() {
+      let companies = opportunity.companies || opportunity.company || null
+      if (opportunity.company_id && !(companies?.legal_name || companies?.name)) {
+        const { data } = await supabase.from('companies')
+          .select('id, name, legal_name, city')
+          .eq('id', opportunity.company_id)
+          .maybeSingle()
+        if (data) companies = data
+      }
+      if (cancelled) return
+      setRow({
+        ...opportunity,
+        companies: companies || opportunity.companies,
+        legal_name: companies?.legal_name || opportunity.legal_name,
+        city: companies?.city || opportunity.city,
+        stage: normalizeOppStage(opportunity.stage) || opportunity.stage,
+        solution: opportunity.pain_points || opportunity.metadata?.solution || '',
+        next_action: opportunity.metadata?.next_action || '',
+        next_action_due: String(opportunity.metadata?.next_action_due || '').slice(0, 10),
+        lost_reason: opportunity.lost_reason || '',
+        expected_close_date: String(opportunity.expected_close_date || '').slice(0, 10),
+      })
+      setShowQuote(true)
+    }
+    hydrate()
+    return () => { cancelled = true }
   }, [opportunity?.id])
 
   async function saveDeal(e) {
     e.preventDefault()
     if (!row?.id || saving) return
+    if (!(row.primary_contact_id || '').trim()) {
+      setFlash('Primary contact is required — select the person this quotation / deal is addressed to.')
+      return
+    }
     setSaving(true)
     const meta = { ...(row.metadata || {}), next_action: row.next_action || null, next_action_due: row.next_action_due || null, solution: row.solution || null }
     const payload = {
@@ -217,12 +243,12 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
         {stage === 'lost' && <Field label="Lost reason *"><input className="input" required value={row.lost_reason || ''} onChange={e => setRow({ ...row, lost_reason: e.target.value })} /></Field>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="Expected close"><input className="input" type="date" value={row.expected_close_date || ''} onChange={e => setRow({ ...row, expected_close_date: e.target.value })} /></Field>
-          <Field label="Next action due"><input className="input" type="date" value={row.next_action_due || ''} onChange={e => setRow({ ...row, next_action_due: e.target.value })} /></Field>
+          <Field label="Next action due"><input className="input" type="date" value={row.next_action_due || ''} onChange={e => setRow({ ...row, expected_close_date: e.target.value })} /></Field>
         </div>
         <Field label="Next action"><input className="input" value={row.next_action || ''} onChange={e => setRow({ ...row, next_action: e.target.value })} /></Field>
-        <Field label="Primary contact">
-          <select className="input" value={row.primary_contact_id || ''} onChange={e => setRow({ ...row, primary_contact_id: e.target.value })}>
-            <option value="">—</option>
+        <Field label="Primary contact *">
+          <select className="input" required value={row.primary_contact_id || ''} onChange={e => setRow({ ...row, primary_contact_id: e.target.value })}>
+            <option value="">— Select primary contact —</option>
             {contacts.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
           </select>
         </Field>
@@ -242,20 +268,13 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
           <div style={{ fontSize: 12, color: '#166534', marginBottom: 10 }}>
             Split multi-line quotations across sites or staggered invoices. Enter qty per product. Remaining qty is tracked automatically.
           </div>
-
           {productLinesForDispatch().length === 0 ? (
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>No quotation product lines yet — add a quote first.</div>
           ) : (
             <div style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Quote lines · remaining</div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', padding: 4 }}>Product</th>
-                    <th style={{ textAlign: 'right', padding: 4 }}>Quoted</th>
-                    <th style={{ textAlign: 'right', padding: 4 }}>Remaining</th>
-                  </tr>
-                </thead>
+                <thead><tr><th style={{ textAlign: 'left', padding: 4 }}>Product</th><th style={{ textAlign: 'right', padding: 4 }}>Quoted</th><th style={{ textAlign: 'right', padding: 4 }}>Remaining</th></tr></thead>
                 <tbody>
                   {productLinesForDispatch().map(p => (
                     <tr key={p.id}>
@@ -268,7 +287,6 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
               </table>
             </div>
           )}
-
           {(row.metadata?.dispatches || []).map(d => (
             <div key={d.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
@@ -280,15 +298,12 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
                     {d.invoice_date ? ` · Inv date ${d.invoice_date}` : ''}
                     {d.dispatched_date ? ` · Dispatched ${d.dispatched_date}` : ''}
                   </div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}>
-                    {(d.lines || []).map(ln => `${ln.product_name} × ${ln.qty}`).join(' · ') || '—'}
-                  </div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>{(d.lines || []).map(ln => `${ln.product_name} × ${ln.qty}`).join(' · ') || '—'}</div>
                 </div>
                 <button type="button" className="btn" style={{ fontSize: 11 }} onClick={() => removeDispatch(d.id)}>Remove</button>
               </div>
             </div>
           ))}
-
           <form onSubmit={addDispatch}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 8 }}>
               <Field label="Dispatch label *"><input className="input" value={dispatchForm.label} onChange={e => setDispatchForm(f => ({ ...f, label: e.target.value }))} placeholder="Site A / Invoice 1" /></Field>
@@ -323,7 +338,11 @@ export function OpportunityDetail({ opportunity, contacts = [], onClose, onSaved
           <div style={{ fontWeight: 700, marginBottom: 6 }}>2. Quotations</div>
           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Optional until you are ready. Use <strong>Copy for Excel</strong> on each quote.</div>
           <QuotationPanel
-            opportunity={row}
+            opportunity={{
+              ...row,
+              _contacts: contacts,
+              primary_contact_name: (contacts.find(c => String(c.id) === String(row.primary_contact_id)) || {}).full_name || '',
+            }}
             onTotalChange={(total) => {
               if (total != null) setRow(r => (r ? { ...r, deal_size: total } : r))
             }}
@@ -338,6 +357,9 @@ export async function createOppWithOptionalTask(form, companyId) {
   const payload = buildOppCreatePayload({ company_id: companyId, form })
   if (!(payload.requirement_description || '').trim()) {
     return { data: null, error: { message: 'Requirement is required.' } }
+  }
+  if (!(form.primary_contact_id || '').trim()) {
+    return { data: null, error: { message: 'Primary contact is required.' } }
   }
   let { data, error } = await supabase.from('opportunities').insert(payload).select('id').single()
   if (error && /primary_contact|column/i.test(error.message)) {

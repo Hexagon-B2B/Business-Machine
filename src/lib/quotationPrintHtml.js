@@ -88,16 +88,17 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '<li><strong>Ownership:</strong> Goods/materials/licenses remain the property of HEXAGON B2B SOLUTIONS until full payment of the applicable invoice.</li>' +
     '<li><strong>Terms:</strong> In case of conflict, the T&C stated in this quotation shall prevail unless otherwise agreed and accepted in writing by HEXAGON B2B SOLUTIONS.</li>' +
     '<li><strong>Force Majeure:</strong> HEXAGON B2B SOLUTIONS shall not be liable for delays/non-performance due to circumstances beyond its reasonable control, including OEM/vendor delays, government restrictions, natural calamities, strikes, war or other force majeure events.</li>' +
+    '<li><strong>Jurisdiction:</strong> All disputes are subject to Mysuru, Karnataka jurisdiction.</li>' +
     '</ol></div>'
   const payHtml =
     '<div class="pay-block"><h3>Payment Information</h3><div class="pay-grid">' +
     '<div><span class="k">Account Name</span><span class="v">HEXAGON B2B SOLUTIONS</span></div>' +
     '<div><span class="k">Bank</span><span class="v">Canara Bank</span></div>' +
-    '<div><span class="k">Branch</span><span class="v">Jayanagar 4th Block, Bengaluru</span></div>' +
-    '<div><span class="k">Account No.</span><span class="v">120002221123</span></div>' +
-    '<div><span class="k">IFSC</span><span class="v">CNRB0000426</span></div>' +
-    '<div><span class="k">GSTIN</span><span class="v">29AAGFH1234A1Z5</span></div>' +
-    '</div></div>'
+    '<div><span class="k">A/C No.</span><span class="v">125006947288</span></div>' +
+    '<div><span class="k">IFSC</span><span class="v">CNRB0000566</span></div>' +
+    '<div><span class="k">SWIFT</span><span class="v">CNRBINBBJLM</span></div>' +
+    '<div><span class="k">Bank Address</span><span class="v">No. 6, Ganga Temple Road, Jayalakshmipuram, Mysuru – 570012</span></div>' +
+    '</div><div class="pay-note">Remittance Advice: Please email payment/remittance details to <strong>info@hexagonb2b.com</strong>, quoting the relevant invoice number.</div></div>'
   const partnersHtml = partners
     ? '<div class="partners"><div class="partners-label">Trusted Technology Partners — enquire with us for these brands</div>' +
       '<img src="' + partners + '" alt="Trusted Technology Partners"/></div>'
@@ -127,6 +128,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.tc-list{margin:0;padding-left:18px;font-size:10.5px;color:#334155}.tc-list li{margin-bottom:4px}' +
     '.pay-block{margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;page-break-inside:avoid}' +
     '.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:11px}.pay-grid .k{color:#64748b;display:block;font-size:9px;text-transform:uppercase;letter-spacing:.06em}.pay-grid .v{font-weight:600}' +
+    '.pay-note{margin-top:8px;font-size:11px;color:#475569}' +
     '.partners{margin-top:18px;text-align:center;page-break-inside:avoid}.partners-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:8px}' +
     '.partners img{max-width:100%;height:auto;max-height:110px;object-fit:contain}' +
     '</style></head><body><div class="doc">' +

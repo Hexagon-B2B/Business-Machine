@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import { logActivity } from './activityLog'
 import {
   emptyItem, groupRollup, quoteGroups, quoteCustomerTotal, quoteTransferTotal, quoteMargin, customerQuoteNo,
-  normalizeItem, nextQuoteNo, lineCustomerTotal, DEFAULT_TAX_PCT,
+  normalizeItem, nextQuoteNo, companyInitials, indianFy, lineCustomerTotal, DEFAULT_TAX_PCT,
 } from './quotationMath'
 
 export async function loadQuotesForOpp(opportunityId) {
@@ -25,7 +25,6 @@ export async function loadQuotesForOpp(opportunityId) {
   return { quotes: [], error: oppErr || error, storage: 'metadata' }
 }
 
-/** Collect all quotes for a company (across opportunities) for sequence numbering */
 async function loadCompanyQuotes(companyId) {
   if (!companyId) return []
   const { data: opps } = await supabase
@@ -144,7 +143,6 @@ export async function updateQuoteStatus(opportunityId, quoteId, status) {
   return { error }
 }
 
-/** Load all quoted product lines for a company across all opportunities (for history table) */
 export async function loadCompanyQuotedItems(companyId) {
   if (!companyId) return { rows: [], error: null }
   const { data: opps, error } = await supabase
@@ -224,4 +222,77 @@ export function formatQuoteForExcel(quote, { taxPct = DEFAULT_TAX_PCT } = {}) {
     quote.delivery_tat ? `Delivery TAT: ${quote.delivery_tat}` : '',
   ].filter(Boolean).join(' | ')
   return header + '\n' + lines.join('\n')
+}
+
+/** One-time: rewrite stored quotation_no values to HB2B-{FY}-{CUST}-SEQ (keeps version on the quote). */
+export async function migrateAllQuoteNumbers() {
+  const { data: companies, error: cErr } = await supabase.from('companies').select('id, name, legal_name')
+  if (cErr) return { ok: false, error: cErr, updated: 0 }
+  let updated = 0
+  const errors = []
+  for (const co of companies || []) {
+    const { data: opps, error: oErr } = await supabase
+      .from('opportunities')
+      .select('id, metadata')
+      .eq('company_id', co.id)
+      .not('state', 'eq', 'deleted')
+    if (oErr) { errors.push(oErr.message); continue }
+    const items = []
+    for (const o of opps || []) {
+      const qs = Array.isArray(o?.metadata?.quotes) ? o.metadata.quotes : []
+      for (const q of qs) items.push({ oppId: o.id, quote: q })
+    }
+    if (!items.length) continue
+    items.sort((a, b) => {
+      const da = String(a.quote.created_at || '')
+      const db = String(b.quote.created_at || '')
+      if (da !== db) return da.localeCompare(db)
+      return (Number(a.quote.version) || 1) - (Number(b.quote.version) || 1)
+    })
+    const fySeq = {}
+    const familyNo = {}
+    const cust = companyInitials(co.legal_name, co.name)
+    function fyOf(iso) {
+      const d = iso ? new Date(iso) : new Date()
+      if (Number.isNaN(d.getTime())) return indianFy()
+      return indianFy(d)
+    }
+    for (const { quote: q } of items) {
+      const raw = String(q.quotation_no || '').replace(/-V\d+$/i, '')
+      if (raw.startsWith('HB2B-')) {
+        const m = raw.match(/^HB2B-(\d{4}-\d{2})-[A-Z0-9]+-(\d+)$/i)
+        if (m) {
+          const fy = m[1]
+          const n = parseInt(m[2], 10)
+          if (!fySeq[fy] || n >= fySeq[fy]) fySeq[fy] = n
+          familyNo[raw] = raw
+        }
+        continue
+      }
+      if (familyNo[raw]) continue
+      const fy = fyOf(q.created_at)
+      const next = (fySeq[fy] || 0) + 1
+      fySeq[fy] = next
+      familyNo[raw] = `HB2B-${fy}-${cust}-` + String(next).padStart(3, '0')
+    }
+    for (const o of opps || []) {
+      const meta = { ...(o.metadata || {}) }
+      const qs = Array.isArray(meta.quotes) ? meta.quotes : []
+      if (!qs.length) continue
+      let changed = false
+      const nextQs = qs.map(q => {
+        const raw = String(q.quotation_no || '').replace(/-V\d+$/i, '')
+        const neu = familyNo[raw]
+        if (!neu || neu === raw) return q
+        changed = true
+        return { ...q, quotation_no: neu, previous_quotation_no: q.quotation_no }
+      })
+      if (!changed) continue
+      meta.quotes = nextQs
+      const { error } = await supabase.from('opportunities').update({ metadata: meta }).eq('id', o.id)
+      if (error) errors.push(error.message)
+      else updated += 1
+    }
+  }
+  return { ok: errors.length === 0, updated, errors }
 }

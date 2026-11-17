@@ -150,7 +150,9 @@ export default function CompanyDetail({ id, go, access }) {
         </div>
         {ownerProfile && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Owner: {ownerProfile.full_name || ownerProfile.email}</div>}
       </div>
-      <div className="notice">Company detail restored. Hard-refresh if you still see the old notice.</div>
+      <div className="notice" style={{ marginTop: 12 }}>
+        Company header is live. Full tabs (contacts, tasks, meetings, opportunities, edit) are being restored in the next deploy — no Quoted Items changes.
+      </div>
     </div>
   )
 }

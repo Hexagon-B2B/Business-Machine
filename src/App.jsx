@@ -12,6 +12,7 @@ import Opportunities from './pages/Opportunities'
 import Research from './pages/Research'
 import Settings from './pages/Settings'
 import Trash from './pages/Trash'
+import { migrateAllQuoteNumbers } from './lib/quotations'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -33,6 +34,15 @@ export default function App() {
   }, [])
 
   useEffect(() => { setMenuOpen(false) }, [page, selectedCompanyId])
+
+  useEffect(() => {
+    if (!session) return
+    if (localStorage.getItem('hb2b_quote_nos_migrated_v1')) return
+    migrateAllQuoteNumbers().then(r => {
+      if (r && (r.ok || r.updated > 0)) localStorage.setItem('hb2b_quote_nos_migrated_v1', '1')
+      if (r && r.updated) console.info('Quote numbers migrated:', r.updated)
+    }).catch(() => {})
+  }, [session])
 
   if (loading || (session && access.loading)) {
     return <div className="loading">Loading Hexagon B2B...</div>

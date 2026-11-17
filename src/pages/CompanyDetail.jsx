@@ -1,27 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { LIFECYCLE, ROLES, OPP_STAGES, isTaskOpen, isTaskClosed, lifecycleLabel, oppStageLabel, NOT_QUALIFIED_REASONS } from '../constants'
-import { Modal, Field, Actions, Badge, CompanySearchSelect } from '../ui'
-import {
-  EMPTY_OPP_FORM,
-  OpportunityCreateFields,
-  OpportunityDetail,
-  createOppWithOptionalTask,
-} from '../components/OpportunityShared'
+import { LIFECYCLE, isTaskOpen, isTaskClosed, lifecycleLabel } from '../constants'
+import { EMPTY_OPP_FORM, createOppWithOptionalTask } from '../components/OpportunityShared'
 import { canCreateActivity, isOwner } from '../access'
-
-function isLeft(ct) {
-  return (ct.contact_status || 'active') === 'left'
-}
-
-function phoneLine(ct) {
-  return [ct.phone, ct.phone_mobile_2, ct.phone_landline].filter(Boolean).join(' / ') || '—'
-}
-
-function leftReason(ct) {
-  const m = ct.metadata && typeof ct.metadata === 'object' ? ct.metadata : {}
-  return m.left_reason || m.left_notes || ''
-}
+import { isLeft, phoneLine, leftReason } from './companyDetailHelpers'
+import CompanyDetailBody from './CompanyDetailBody'
+import CompanyDetailModals from './CompanyDetailModals'
 
 export default function CompanyDetail({ id, go, access }) {
   const [company, setCompany] = useState(null)
@@ -32,266 +16,322 @@ export default function CompanyDetail({ id, go, access }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [tab, setTab] = useState('overview')
+  const [showContact, setShowContact] = useState(false)
+  const [editingContactId, setEditingContactId] = useState(null)
+  const [showTask, setShowTask] = useState(false)
+  const [showMeeting, setShowMeeting] = useState(false)
   const [showOpp, setShowOpp] = useState(false)
-  const [oppForm, setOppForm] = useState({ ...EMPTY_OPP_FORM })
-  const [openOppId, setOpenOppId] = useState(null)
-  const [ownerProfile, setOwnerProfile] = useState(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showNotQualified, setShowNotQualified] = useState(false)
+  const [editTask, setEditTask] = useState(null)
+  const [editMeeting, setEditMeeting] = useState(null)
+  const [signals, setSignals] = useState([])
+  const [cForm, setCForm] = useState({ full_name: '', job_title: '', role: '', email: '', phone: '', phone_mobile_2: '', phone_landline: '', phone_extension: '', promo_opt_out: false })
+  const [dupHints, setDupHints] = useState({ email: '', phone: '', phone_mobile_2: '' })
+  const [moveContact, setMoveContact] = useState(null)
+  const [moveForm, setMoveForm] = useState({ mode: 'left', new_company_id: '', job_title: '', role: '', notes: '', left_reason: '' })
   const [flash, setFlash] = useState('')
+  const [tForm, setTForm] = useState({ title: '', description: '', priority: 'medium', due_at: '', contact_id: '' })
+  const [mForm, setMForm] = useState({ type: 'call', subject: '', description: '', outcome: '', next_action: '', scheduled_at: '', status: 'open', contact_id: '' })
+  const [oForm, setOForm] = useState({ ...EMPTY_OPP_FORM })
+  const [eForm, setEForm] = useState({})
+  const [nqReason, setNqReason] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedOpp, setSelectedOpp] = useState(null)
+  const [showTransfer, setShowTransfer] = useState(false)
+  const [transferTo, setTransferTo] = useState('')
+  const [transferReason, setTransferReason] = useState('')
+  const [transferBusy, setTransferBusy] = useState(false)
+  const [teamProfiles, setTeamProfiles] = useState([])
+  const [ownerProfile, setOwnerProfile] = useState(null)
 
-  useEffect(() => {
+  async function load() {
     if (!id) return
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setLoadError('')
-      try {
-        const { data: co, error: coErr } = await supabase.from('companies').select('*').eq('id', id).maybeSingle()
-        if (coErr) throw coErr
-        if (!co) {
-          if (!cancelled) { setCompany(null); setLoadError('Company not found'); setLoading(false) }
-          return
-        }
-        const [ct, tk, mt, op] = await Promise.all([
-          supabase.from('contacts').select('*').eq('company_id', id).order('full_name'),
-          supabase.from('tasks').select('*').eq('company_id', id).order('due_date', { ascending: true }),
-          supabase.from('meetings_calls').select('*').eq('company_id', id).order('scheduled_at', { ascending: false }),
-          supabase.from('opportunities').select('*').eq('company_id', id).not('state', 'eq', 'deleted').order('updated_at', { ascending: false }),
-        ])
-        if (cancelled) return
-        setCompany(co)
-        setContacts(ct.data || [])
-        setTasks(tk.data || [])
-        setMeetings(mt.data || [])
-        setOpps(op.data || [])
-        if (co.owner_id) {
-          const { data: opProfile } = await supabase.from('profiles').select('id, full_name, email, role').eq('id', co.owner_id).maybeSingle()
-          if (!cancelled) setOwnerProfile(opProfile)
-        } else if (!cancelled) setOwnerProfile(null)
-      } catch (e) {
-        if (!cancelled) setLoadError(e.message || 'Failed to load company')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+    setLoading(true)
+    setLoadError('')
+    try {
+      const { data: co, error: coErr } = await supabase.from('companies').select('*').eq('id', id).maybeSingle()
+      if (coErr) throw coErr
+      if (!co) { setCompany(null); setLoadError('Company not found'); setLoading(false); return }
+      const [ct, tk, mt, op, sg] = await Promise.all([
+        supabase.from('contacts').select('*').eq('company_id', id).order('full_name'),
+        supabase.from('tasks').select('*').eq('company_id', id).order('due_date', { ascending: true }),
+        supabase.from('meetings_calls').select('*').eq('company_id', id).order('scheduled_at', { ascending: false }),
+        supabase.from('opportunities').select('*').eq('company_id', id).not('state', 'eq', 'deleted').order('updated_at', { ascending: false }),
+        supabase.from('research_signals').select('*').eq('company_id', id).order('created_at', { ascending: false }).limit(20),
+      ])
+      setCompany(co)
+      setContacts(ct.data || [])
+      setTasks(tk.data || [])
+      setMeetings(mt.data || [])
+      setOpps(op.data || [])
+      setSignals(sg.data || [])
+      if (co.owner_id) {
+        const { data: opProfile } = await supabase.from('profiles').select('id, full_name, email, role').eq('id', co.owner_id).maybeSingle()
+        setOwnerProfile(opProfile)
+      } else setOwnerProfile(null)
+    } catch (e) {
+      setLoadError(e.message || 'Failed to load company')
+    } finally {
+      setLoading(false)
     }
-    load()
-    return () => { cancelled = true }
-  }, [id])
-
-  useEffect(() => {
-    setTab('overview')
-    setOpenOppId(null)
-    setShowOpp(false)
-  }, [id])
-
-  async function reloadOpps() {
-    const { data } = await supabase.from('opportunities').select('*').eq('company_id', id).not('state', 'eq', 'deleted').order('updated_at', { ascending: false })
-    setOpps(data || [])
   }
 
-  async function saveOpp(e) {
+  useEffect(() => { load() }, [id])
+  useEffect(() => {
+    setTab('overview'); setSelectedOpp(null); setShowContact(false); setShowTask(false)
+    setShowMeeting(false); setShowOpp(false); setShowEdit(false)
+  }, [id])
+
+  function showFlash(msg) {
+    setFlash(msg)
+    setTimeout(() => setFlash(''), 2500)
+  }
+
+  async function openTransfer() {
+    const { data } = await supabase.from('profiles').select('id, full_name, email, role').eq('is_active', true).order('full_name')
+    setTeamProfiles(data || [])
+    setTransferTo(''); setTransferReason(''); setShowTransfer(true)
+  }
+
+  async function confirmTransfer(e) {
     e.preventDefault()
+    if (!transferTo || !transferReason.trim()) return
+    setTransferBusy(true)
+    try {
+      await supabase.from('ownership_transfers').insert({
+        company_id: id, from_owner_id: company.owner_id, to_owner_id: transferTo,
+        purpose: transferReason.trim(), transferred_by: access?.userId || null,
+      })
+      const { error } = await supabase.from('companies').update({ owner_id: transferTo }).eq('id', id)
+      if (error) throw error
+      setShowTransfer(false); showFlash('Ownership transferred'); load()
+    } catch (err) {
+      alert(err.message || 'Transfer failed')
+    } finally {
+      setTransferBusy(false)
+    }
+  }
+
+  async function addOpp(e) {
+    e.preventDefault()
+    if (!canCreateActivity(access, company?.owner_id)) {
+      alert('Only the Account Owner can create opportunities. Admin: Transfer ownership to yourself first.')
+      return
+    }
     setSaving(true)
     try {
-      await createOppWithOptionalTask({ companyId: id, form: oppForm, access })
-      setShowOpp(false)
-      setOppForm({ ...EMPTY_OPP_FORM })
-      await reloadOpps()
-      setFlash('Opportunity created')
-      setTimeout(() => setFlash(''), 2500)
+      await createOppWithOptionalTask({ companyId: id, form: oForm, access })
+      setShowOpp(false); setOForm({ ...EMPTY_OPP_FORM }); await load(); showFlash('Opportunity created')
     } catch (err) {
-      setFlash(err.message || 'Could not create opportunity')
+      alert(err.message || 'Could not create opportunity')
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) return <div style={{ padding: 28 }}>Loading company…</div>
-  if (loadError) return (
-    <div style={{ padding: 28 }}>
-      <button type="button" className="btn" onClick={() => go('companies')}>← Companies</button>
-      <div className="notice" style={{ marginTop: 16, color: '#b91c1c' }}>{loadError}</div>
-    </div>
-  )
-  if (!company) return (
-    <div style={{ padding: 28 }}>
-      <button type="button" className="btn" onClick={() => go('companies')}>← Companies</button>
-      <div className="notice" style={{ marginTop: 16 }}>Company not found.</div>
-    </div>
-  )
+  function onLifecycleChange(val) {
+    if (val === 'not_qualified') { setNqReason(''); setShowNotQualified(true); return }
+    updateLifecycle(val, null)
+  }
+
+  async function updateLifecycle(val, notQualifiedReason) {
+    const patch = { lifecycle_status: val }
+    if (val === 'not_qualified' && notQualifiedReason) patch.not_qualified_reason = notQualifiedReason
+    const { error } = await supabase.from('companies').update(patch).eq('id', id)
+    if (error) alert(error.message); else load()
+  }
+
+  async function saveNotQualified(e) {
+    e.preventDefault()
+    if (!nqReason) return
+    setShowNotQualified(false)
+    await updateLifecycle('not_qualified', nqReason)
+  }
+
+  function openEdit() {
+    setEForm({
+      name: company.name || '', legal_name: company.legal_name || '', short_name: company.short_name || '',
+      address: company.address || '', city: company.city || '', pincode: company.pincode || '', country: company.country || '',
+      hq: company.hq || company.hq_location || '', board_no: company.board_no || '',
+      employees: company.employees || company.employee_count || '', gst: company.gst || company.gst_no || company.gstin || '',
+      website: company.website || '', email: company.email || '', industry: company.industry || '', notes: company.notes || '',
+      locations: (company.metadata && company.metadata.locations) || [],
+    })
+    setShowEdit(true)
+  }
+
+  async function saveCompany(e) {
+    e.preventDefault()
+    setSaving(true)
+    const meta = { ...(company.metadata || {}), locations: eForm.locations || [] }
+    const { error } = await supabase.from('companies').update({
+      name: eForm.name, legal_name: eForm.legal_name || null, short_name: eForm.short_name || null,
+      address: eForm.address || null, city: eForm.city || null, pincode: eForm.pincode || null, country: eForm.country || null,
+      hq: eForm.hq || null, board_no: eForm.board_no || null, employees: eForm.employees || null,
+      gst: eForm.gst || null, website: eForm.website || null, email: eForm.email || null,
+      industry: eForm.industry || null, notes: eForm.notes || null, metadata: meta,
+    }).eq('id', id)
+    setSaving(false)
+    if (error) alert(error.message); else { setShowEdit(false); load(); showFlash('Company updated') }
+  }
+
+  async function checkDup(field, value) {
+    const v = (value || '').trim()
+    if (!v) { setDupHints(h => ({ ...h, [field]: '' })); return }
+    let q = supabase.from('contacts').select('id, full_name, company_id').neq('company_id', id).limit(3)
+    if (field === 'email') q = q.ilike('email', v)
+    else if (field === 'phone') q = q.eq('phone', v)
+    else if (field === 'phone_mobile_2') q = q.eq('phone_mobile_2', v)
+    const { data } = await q
+    setDupHints(h => ({ ...h, [field]: data && data.length ? `Also on another company (${data[0].full_name})` : '' }))
+  }
+
+  async function saveContact(e) {
+    e.preventDefault()
+    setSaving(true)
+    const payload = {
+      full_name: cForm.full_name, job_title: cForm.job_title || null, role: cForm.role || null,
+      email: cForm.email || null, phone: cForm.phone || null, phone_mobile_2: cForm.phone_mobile_2 || null,
+      phone_landline: cForm.phone_landline || null, phone_extension: cForm.phone_extension || null,
+      company_id: id, metadata: { promo_opt_out: !!cForm.promo_opt_out },
+    }
+    let error
+    if (editingContactId) ({ error } = await supabase.from('contacts').update(payload).eq('id', editingContactId))
+    else ({ error } = await supabase.from('contacts').insert(payload))
+    setSaving(false)
+    if (error) alert(error.message); else { setShowContact(false); load(); showFlash('Contact saved') }
+  }
+
+  function openMove(ct) {
+    setMoveContact(ct)
+    setMoveForm({ mode: isLeft(ct) ? 'transfer' : 'left', new_company_id: '', job_title: ct.job_title || '', role: ct.role || '', notes: '', left_reason: leftReason(ct) || '' })
+  }
+
+  async function saveMove(e) {
+    e.preventDefault()
+    setSaving(true)
+    if (moveForm.mode === 'left') {
+      const meta = { ...(moveContact.metadata || {}), left_reason: moveForm.left_reason || '', left_at: new Date().toISOString() }
+      const { error } = await supabase.from('contacts').update({ contact_status: 'left', metadata: meta }).eq('id', moveContact.id)
+      setSaving(false)
+      if (error) alert(error.message); else { setMoveContact(null); load() }
+    } else {
+      if (!moveForm.new_company_id) { setSaving(false); alert('Select the new company.'); return }
+      const meta = { ...(moveContact.metadata || {}), previous_company_id: id, transferred_at: new Date().toISOString() }
+      const { error } = await supabase.from('contacts').update({
+        company_id: moveForm.new_company_id, job_title: moveForm.job_title || null,
+        role: moveForm.role || null, contact_status: 'active', metadata: meta,
+      }).eq('id', moveContact.id)
+      setSaving(false)
+      if (error) alert(error.message); else { setMoveContact(null); load() }
+    }
+  }
+
+  async function restoreContact(ct) {
+    const { error } = await supabase.from('contacts').update({ contact_status: 'active' }).eq('id', ct.id)
+    if (error) alert(error.message); else load()
+  }
+
+  async function addTask(e) {
+    e.preventDefault()
+    if (!canCreateActivity(access, company?.owner_id)) { alert('Only the Account Owner can create tasks.'); return }
+    setSaving(true)
+    const { error } = await supabase.from('tasks').insert({
+      company_id: id, title: tForm.title, description: tForm.description || null,
+      priority: tForm.priority || 'medium', due_date: tForm.due_at || null, status: 'open',
+      created_by: access?.userId || null,
+    })
+    setSaving(false)
+    if (error) alert(error.message); else { setShowTask(false); setTForm({ title: '', description: '', priority: 'medium', due_at: '', contact_id: '' }); load() }
+  }
+
+  async function addMeeting(e) {
+    e.preventDefault()
+    if (!canCreateActivity(access, company?.owner_id)) { alert('Only the Account Owner can log calls/meetings.'); return }
+    setSaving(true)
+    const { error } = await supabase.from('meetings_calls').insert({
+      company_id: id, type: mForm.type || 'call', subject: mForm.subject, notes: mForm.description || null,
+      outcome: mForm.outcome || null, scheduled_at: mForm.scheduled_at || null, status: mForm.status || 'open',
+      created_by: access?.userId || null,
+    })
+    setSaving(false)
+    if (error) alert(error.message); else { setShowMeeting(false); load() }
+  }
+
+  async function saveEditTask(e) {
+    e.preventDefault()
+    setSaving(true)
+    const { error } = await supabase.from('tasks').update({
+      title: editTask.title, status: editTask.status, priority: editTask.priority,
+      due_date: editTask.due_at || null,
+    }).eq('id', editTask.id)
+    setSaving(false)
+    if (error) alert(error.message); else { setEditTask(null); load() }
+  }
+
+  async function saveEditMeeting(e) {
+    e.preventDefault()
+    setSaving(true)
+    const { error } = await supabase.from('meetings_calls').update({
+      type: editMeeting.type, subject: editMeeting.subject, outcome: editMeeting.outcome || null,
+      status: editMeeting.status, scheduled_at: editMeeting.scheduled_at || null,
+    }).eq('id', editMeeting.id)
+    setSaving(false)
+    if (error) alert(error.message); else { setEditMeeting(null); load() }
+  }
+
+  if (loading) return <div className="loading" style={{ padding: 40 }}>Loading company…</div>
+  if (!id || loadError || !company) {
+    return (
+      <div className="empty" style={{ padding: 40 }}>
+        {loadError || (!id ? 'No company selected.' : 'Company not found')}
+        <div style={{ marginTop: 12 }}><button type="button" className="btn" onClick={() => go('companies')}>← Companies</button></div>
+      </div>
+    )
+  }
 
   const activeContacts = contacts.filter(c => !isLeft(c))
   const leftContacts = contacts.filter(c => isLeft(c))
-  const canAct = canCreateActivity(access, company)
+  const mayCreate = canCreateActivity(access, company.owner_id)
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'contacts', label: `Contacts (${activeContacts.length})` },
-    { id: 'tasks', label: `Tasks (${tasks.filter(t => isTaskOpen(t)).length})` },
+    { id: 'contacts', label: `Contacts (${activeContacts.length}${leftContacts.length ? ` · ${leftContacts.length} left` : ''})` },
+    { id: 'tasks', label: `Tasks (${tasks.filter(t => isTaskOpen(t.status)).length})` },
     { id: 'meetings', label: `Meetings (${meetings.length})` },
     { id: 'opps', label: `Opportunities (${opps.length})` },
+    { id: 'quoted', label: 'Quoted items' },
   ]
 
   return (
-    <div style={{ padding: 28 }}>
-      <button type="button" className="btn" onClick={() => go('companies')}>← Companies</button>
-      <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>{company.name}</h1>
-          {company.legal_name && <div style={{ color: '#64748b', fontSize: 13 }}>{company.legal_name}</div>}
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-            {[company.city, company.pincode, company.hq ? 'HQ: ' + company.hq : null, company.employees ? company.employees + ' emp' : null].filter(Boolean).join(' · ')}
-          </div>
-          {ownerProfile && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Owner: {ownerProfile.full_name || ownerProfile.email}</div>}
-          <div style={{ marginTop: 6 }}><Badge>{lifecycleLabel(company.lifecycle_status) || company.lifecycle_status || '—'}</Badge></div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {canAct && (
-            <button type="button" className="btn primary" onClick={() => { setOppForm({ ...EMPTY_OPP_FORM }); setShowOpp(true) }}>+ Opportunity</button>
-          )}
-        </div>
-      </div>
-      {flash && <div className="notice" style={{ marginBottom: 12 }}>{flash}</div>}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        {tabs.map(t => (
-          <button key={t.id} type="button" className="btn" onClick={() => setTab(t.id)} style={{ background: tab === t.id ? '#2563eb' : '#fff', color: tab === t.id ? '#fff' : '#0f172a' }}>{t.label}</button>
-        ))}
-      </div>
-
-      {tab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div className="card" style={{ padding: 14 }}>
-            <h3 style={{ marginTop: 0, fontSize: 13, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>Company</h3>
-            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              <div><strong>Legal name:</strong> {company.legal_name || '—'}</div>
-              <div><strong>Website:</strong> {company.website || '—'}</div>
-              <div><strong>Email:</strong> {company.email || '—'}</div>
-              <div><strong>GST:</strong> {company.gstin || company.gst || '—'}</div>
-              <div><strong>Industry:</strong> {company.industry || '—'}</div>
-              <div><strong>Board Tele:</strong> {company.board_no || '—'}</div>
-              <div style={{ marginTop: 8 }}><strong>Address:</strong> {company.address || '—'}</div>
-            </div>
-          </div>
-          <div className="card" style={{ padding: 14 }}>
-            <h3 style={{ marginTop: 0, fontSize: 13, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em' }}>Snapshot</h3>
-            <div style={{ fontSize: 13, lineHeight: 1.7 }}>
-              <div>Active contacts: <strong>{activeContacts.length}</strong></div>
-              <div>Open tasks: <strong>{tasks.filter(t => isTaskOpen(t)).length}</strong></div>
-              <div>Meetings / calls: <strong>{meetings.length}</strong></div>
-              <div>Opportunities: <strong>{opps.length}</strong></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'contacts' && (
-        <div>
-          <table className="table" style={{ width: '100%', fontSize: 13 }}>
-            <thead><tr><th>Name</th><th>Title</th><th>Role</th><th>Email</th><th>Phones</th></tr></thead>
-            <tbody>
-              {activeContacts.map(ct => (
-                <tr key={ct.id}>
-                  <td>{ct.full_name}</td>
-                  <td>{ct.job_title || '—'}</td>
-                  <td>{ct.role || '—'}</td>
-                  <td>{ct.email || '—'}</td>
-                  <td>{phoneLine(ct)}</td>
-                </tr>
-              ))}
-              {!activeContacts.length && <tr><td colSpan={5} style={{ color: '#64748b' }}>No active contacts</td></tr>}
-            </tbody>
-          </table>
-          {!!leftContacts.length && (
-            <>
-              <h3 style={{ fontSize: 13, color: '#64748b', marginTop: 20 }}>Left</h3>
-              <table className="table" style={{ width: '100%', fontSize: 13 }}>
-                <thead><tr><th>Name</th><th>Reason</th><th>Phones</th></tr></thead>
-                <tbody>
-                  {leftContacts.map(ct => (
-                    <tr key={ct.id}>
-                      <td>{ct.full_name}</td>
-                      <td style={{ color: '#64748b' }}>{leftReason(ct) || '—'}</td>
-                      <td>{phoneLine(ct)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === 'tasks' && (
-        <table className="table" style={{ width: '100%', fontSize: 13 }}>
-          <thead><tr><th>Title</th><th>Due</th><th>Priority</th><th>Status</th></tr></thead>
-          <tbody>
-            {tasks.map(t => (
-              <tr key={t.id}>
-                <td>{t.title}</td>
-                <td>{t.due_date ? String(t.due_date).slice(0, 10) : '—'}</td>
-                <td>{t.priority || '—'}</td>
-                <td>{t.status || '—'}</td>
-              </tr>
-            ))}
-            {!tasks.length && <tr><td colSpan={4} style={{ color: '#64748b' }}>No tasks</td></tr>}
-          </tbody>
-        </table>
-      )}
-
-      {tab === 'meetings' && (
-        <table className="table" style={{ width: '100%', fontSize: 13 }}>
-          <thead><tr><th>Type</th><th>Subject</th><th>When</th><th>Status</th></tr></thead>
-          <tbody>
-            {meetings.map(m => (
-              <tr key={m.id}>
-                <td>{m.type || '—'}</td>
-                <td>{m.subject || '—'}</td>
-                <td>{m.scheduled_at ? String(m.scheduled_at).replace('T', ' ').slice(0, 16) : '—'}</td>
-                <td>{m.status || '—'}</td>
-              </tr>
-            ))}
-            {!meetings.length && <tr><td colSpan={4} style={{ color: '#64748b' }}>No meetings or calls</td></tr>}
-          </tbody>
-        </table>
-      )}
-
-      {tab === 'opps' && (
-        <div>
-          {openOppId ? (
-            <OpportunityDetail
-              opportunity={opps.find(o => o.id === openOppId) || null}
-              company={company}
-              contacts={activeContacts}
-              onClose={() => setOpenOppId(null)}
-              onChanged={reloadOpps}
-              access={access}
-            />
-          ) : (
-            <table className="table" style={{ width: '100%', fontSize: 13 }}>
-              <thead><tr><th>Name</th><th>Stage</th><th>Deal size</th><th>Updated</th></tr></thead>
-              <tbody>
-                {opps.map(o => (
-                  <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setOpenOppId(o.id)}>
-                    <td>{o.name}</td>
-                    <td>{oppStageLabel(o.stage) || o.stage}</td>
-                    <td>{o.deal_size != null ? '₹ ' + Number(o.deal_size).toLocaleString('en-IN') : '—'}</td>
-                    <td>{o.updated_at ? String(o.updated_at).slice(0, 10) : '—'}</td>
-                  </tr>
-                ))}
-                {!opps.length && <tr><td colSpan={4} style={{ color: '#64748b' }}>No opportunities</td></tr>}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {showOpp && (
-        <Modal title="New opportunity" onClose={() => setShowOpp(false)} width={720}>
-          <form onSubmit={saveOpp}>
-            <OpportunityCreateFields form={oppForm} setForm={setOppForm} companyId={id} contacts={activeContacts} />
-            <Actions saving={saving} onCancel={() => setShowOpp(false)} label="Create opportunity" />
-          </form>
-        </Modal>
-      )}
-    </div>
+    <>
+      <CompanyDetailBody
+        access={access} activeContacts={activeContacts} company={company} contacts={contacts}
+        flash={flash} go={go} id={id} leftContacts={leftContacts} mayCreate={mayCreate}
+        meetings={meetings} opps={opps} ownerProfile={ownerProfile} signals={signals}
+        tab={tab} tabs={tabs} tasks={tasks} setTab={setTab}
+        openEdit={openEdit} openTransfer={openTransfer} onLifecycleChange={onLifecycleChange}
+        setShowContact={setShowContact} setEditingContactId={setEditingContactId} setCForm={setCForm} setDupHints={setDupHints}
+        setShowTask={setShowTask} setTForm={setTForm} setShowMeeting={setShowMeeting} setMForm={setMForm}
+        setShowOpp={setShowOpp} setOForm={setOForm} openMove={openMove} restoreContact={restoreContact}
+        setEditTask={setEditTask} setEditMeeting={setEditMeeting} selectedOpp={selectedOpp} setSelectedOpp={setSelectedOpp} load={load}
+      />
+      <CompanyDetailModals
+        company={company} contacts={contacts} id={id} saving={saving}
+        cForm={cForm} setCForm={setCForm} dupHints={dupHints} setDupHints={setDupHints} checkDup={checkDup}
+        editingContactId={editingContactId} showContact={showContact} setShowContact={setShowContact} saveContact={saveContact}
+        moveContact={moveContact} setMoveContact={setMoveContact} moveForm={moveForm} setMoveForm={setMoveForm} saveMove={saveMove}
+        showTask={showTask} setShowTask={setShowTask} tForm={tForm} setTForm={setTForm} addTask={addTask}
+        editTask={editTask} setEditTask={setEditTask} saveEditTask={saveEditTask}
+        showMeeting={showMeeting} setShowMeeting={setShowMeeting} mForm={mForm} setMForm={setMForm} addMeeting={addMeeting}
+        editMeeting={editMeeting} setEditMeeting={setEditMeeting} saveEditMeeting={saveEditMeeting}
+        showOpp={showOpp} setShowOpp={setShowOpp} oForm={oForm} setOForm={setOForm} addOpp={addOpp}
+        showEdit={showEdit} setShowEdit={setShowEdit} eForm={eForm} setEForm={setEForm} saveCompany={saveCompany}
+        showNotQualified={showNotQualified} setShowNotQualified={setShowNotQualified} nqReason={nqReason} setNqReason={setNqReason} saveNotQualified={saveNotQualified}
+        showTransfer={showTransfer} setShowTransfer={setShowTransfer} transferTo={transferTo} setTransferTo={setTransferTo}
+        transferReason={transferReason} setTransferReason={setTransferReason} transferBusy={transferBusy}
+        teamProfiles={teamProfiles} ownerProfile={ownerProfile} confirmTransfer={confirmTransfer}
+      />
+    </>
   )
 }

@@ -8,7 +8,7 @@ export {
 
 export {
   loadQuotesForOpp, saveQuotation, updateQuoteStatus, formatQuoteForExcel,
-  loadCompanyQuotedItems,
+  loadCompanyQuotedItems, migrateAllQuoteNumbers,
 } from './quotationStore'
 
 export { formatQuotePrintHtml } from './quotationPrintHtml'

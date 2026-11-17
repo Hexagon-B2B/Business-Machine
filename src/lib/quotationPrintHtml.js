@@ -115,8 +115,8 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     'body{font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:24px 26px;font-size:12.5px;line-height:1.45;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}' +
     '.doc{max-width:740px;margin:0 auto}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;border-bottom:2px solid #0f172a;padding-bottom:12px}' +
-    '.logo-wrap{flex:0 0 auto;max-width:320px;max-height:82px}' +
-    '.logo-wrap img,.logo{max-width:320px;max-height:82px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
+    '.logo-wrap{flex:0 0 auto;max-width:400px;max-height:118px}' +
+    '.logo-wrap img,.logo{max-width:400px;max-height:118px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
     '.doc-title{text-align:right;flex:0 0 auto}' +
     '.doc-title .label{font-size:9px;letter-spacing:.14em;font-weight:700;color:#64748b;text-transform:uppercase}' +
     '.doc-title h1{margin:2px 0 0;font-size:20px;letter-spacing:.04em;font-weight:800}' +
@@ -127,7 +127,9 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.terms{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
     '.term{border:1px solid #e2e8f0;border-radius:6px;padding:7px 9px;background:#fff}' +
     '.term label{display:block;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:3px}' +
-    '.term .tv{font-size:12px;font-weight:600;color:#0f172a;word-break:break-word}' +
+    '.term .tv{font-size:12.5px;font-weight:700;color:#0f172a;word-break:break-word;line-height:1.35}' +
+    '.term.term-loc{background:#f0f9ff;border-color:#bae6fd}' +
+    '.term.term-loc .tv{font-size:13px;font-weight:800;color:#0c4a6e}' +
     'table.items{width:100%;border-collapse:separate;border-spacing:0;margin-top:2px;table-layout:fixed}' +
     'table.items th{background:#e2e8f0;text-align:left;padding:9px 8px;font-size:10px;font-weight:700;border-bottom:2px solid #94a3b8;color:#1e293b}' +
     'table.items td{padding:10px 8px;vertical-align:top;font-size:12.5px}' +
@@ -181,7 +183,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '<div class="term"><label>Validity</label><div class="tv">' + esc(validityDisp) + '</div></div>' +
     '<div class="term"><label>Delivery TAT</label><div class="tv">' + esc(quote.delivery_tat || '—') + '</div></div>' +
     '<div class="term"><label>Payment terms</label><div class="tv">' + esc(quote.payment_terms || '—') + '</div></div>' +
-    '<div class="term"><label>Delivery location</label><div class="tv">' + esc(deliveryLocation || quote.transport_terms || '—') + '</div></div></div>' +
+    '<div class="term term-loc"><label>Delivery location</label><div class="tv">' + esc(deliveryLocation || quote.transport_terms || '—') + '</div></div></div>' +
     '<table class="items"><thead><tr><th class="col-sl">SL</th><th class="col-desc">Description</th><th class="col-qty">Qty</th><th class="col-rate">Unit rate (₹)</th><th class="col-amt">Amount (₹)</th></tr></thead><tbody>' +
     bodyRows + '</tbody></table>' +
     '<div class="totals"><div><span>Subtotal (ex-tax)</span><span>₹ ' + total + '</span></div>' +

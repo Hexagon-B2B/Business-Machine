@@ -98,17 +98,10 @@ export function DataTable({
 
 export function Modal({ title, children, onClose, width = 480 }) {
   useEffect(() => {
-    function onKey(e) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose && onClose()
-      }
-    }
-    document.addEventListener('keydown', onKey)
+    // Escape close disabled — too easy to dismiss forms mid-edit
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
   }, [onClose])

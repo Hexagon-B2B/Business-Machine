@@ -3,7 +3,7 @@ import { customerQuoteNo } from './quotationMath'
 
 /**
  * Professional PDF for email.
- * Scale 1.5 + JPEG 0.80 balances sharp text with ~150–400 KB typical size.
+ * Scale 2.0 + JPEG 0.88 keeps text sharp; typical size still email-friendly for most quotes.
  */
 export async function downloadQuotePdf(quote, opts = {}) {
   const html = formatQuotePrintHtml(quote, opts)
@@ -25,11 +25,11 @@ export async function downloadQuotePdf(quote, opts = {}) {
     doc.close()
     await new Promise((resolve) => {
       const imgs = Array.from(doc.images || [])
-      if (!imgs.length) { setTimeout(resolve, 180); return }
+      if (!imgs.length) { setTimeout(resolve, 220); return }
       let left = imgs.length
-      const done = () => { left -= 1; if (left <= 0) setTimeout(resolve, 100) }
+      const done = () => { left -= 1; if (left <= 0) setTimeout(resolve, 120) }
       imgs.forEach((img) => { if (img.complete) done(); else { img.onload = done; img.onerror = done } })
-      setTimeout(resolve, 2200)
+      setTimeout(resolve, 2800)
     })
     if (!window.__hexagonPdfLibs) {
       const [hcMod, jpMod] = await Promise.all([
@@ -45,17 +45,17 @@ export async function downloadQuotePdf(quote, opts = {}) {
     if (!html2canvas || !jsPDF) throw new Error('PDF libraries failed to load')
 
     const canvas = await html2canvas(doc.body, {
-      scale: 1.5,
+      scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
       windowWidth: 794,
-      imageTimeout: 3000,
+      imageTimeout: 4000,
     })
 
-    // 0.80 keeps text crisp; file size stays email-friendly for typical quotes
-    const imgData = canvas.toDataURL('image/jpeg', 0.80)
+    // 0.88 keeps text crisp while staying under typical email attachment limits
+    const imgData = canvas.toDataURL('image/jpeg', 0.88)
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
     const pageW = pdf.internal.pageSize.getWidth()
     const pageH = pdf.internal.pageSize.getHeight()

@@ -121,7 +121,8 @@ export default function CompanyDetail({ id, go, access }) {
     }
     setSaving(true)
     try {
-      await createOppWithOptionalTask({ companyId: id, form: oForm, access })
+      const { data, error } = await createOppWithOptionalTask(oForm, id)
+      if (error) throw error
       setShowOpp(false); setOForm({ ...EMPTY_OPP_FORM }); await load(); showFlash('Opportunity created')
     } catch (err) {
       alert(err.message || 'Could not create opportunity')

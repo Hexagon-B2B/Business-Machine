@@ -167,10 +167,18 @@ export function QuoteEditor({
         const g = groups.find(x => x.base.id === prod.id) || groupRollup(prod, items)
         const ups = upgradesOf(prod.id)
         const unitRate = g.unitCustomer != null ? g.unitCustomer : 0
+        const isA = pIdx % 2 === 0
         return (
-          <div key={prod.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, marginBottom: 10, background: pIdx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+          <div key={prod.id} style={{
+            border: isA ? '1px solid #bfdbfe' : '1px solid #fde68a',
+            borderLeft: isA ? '4px solid #3b82f6' : '4px solid #f59e0b',
+            borderRadius: 10,
+            padding: 10,
+            marginBottom: 10,
+            background: isA ? '#eff6ff' : '#fffbeb',
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>Line {pIdx + 1} · Base product</div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: isA ? '#1d4ed8' : '#b45309' }}>Line {pIdx + 1} · Base product</div>
               <button type="button" className="btn" style={{ fontSize: 12, color: '#991b1b', borderColor: '#fecaca' }}
                 onClick={() => removeItem(prod.id)} title="Remove this base product and all its upgrades">
                 Remove product + upgrades

@@ -109,11 +109,11 @@ export function formatQuotePrintHtml(quote, opts = {}) {
       '<img src="' + partners + '" alt="Trusted Technology Partners"/></div>'
     : ''
   const css =
-    'body{font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:22px 24px;font-size:12px;line-height:1.42;-webkit-font-smoothing:antialiased}' +
+    'body{font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:24px 26px;font-size:12.5px;line-height:1.45;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}' +
     '.doc{max-width:740px;margin:0 auto}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;border-bottom:2px solid #0f172a;padding-bottom:12px}' +
-    '.logo-wrap{flex:0 0 auto;max-width:280px;max-height:70px}' +
-    '.logo-wrap img,.logo{max-width:280px;max-height:70px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
+    '.logo-wrap{flex:0 0 auto;max-width:320px;max-height:82px}' +
+    '.logo-wrap img,.logo{max-width:320px;max-height:82px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
     '.doc-title{text-align:right;flex:0 0 auto}' +
     '.doc-title .label{font-size:9px;letter-spacing:.14em;font-weight:700;color:#64748b;text-transform:uppercase}' +
     '.doc-title h1{margin:2px 0 0;font-size:20px;letter-spacing:.04em;font-weight:800}' +
@@ -127,7 +127,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.term .tv{font-size:12px;font-weight:600;color:#0f172a;word-break:break-word}' +
     'table.items{width:100%;border-collapse:collapse;margin-top:2px;table-layout:fixed}' +
     'table.items th{background:#f1f5f9;text-align:left;padding:8px 8px;font-size:10px;font-weight:700;border-bottom:1px solid #cbd5e1;color:#334155}' +
-    'table.items td{padding:8px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top;font-size:12px}' +
+    'table.items td{padding:9px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top;font-size:12.5px}' +
     'tr.item-row{page-break-inside:avoid;break-inside:avoid}' +
     'tbody tr.item-row:nth-child(even){background:#f8fafc}' +
     '.col-sl{width:36px;color:#64748b;text-align:center}' +
@@ -146,11 +146,11 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     '.foot{display:flex;justify-content:space-between;margin-top:20px;gap:20px}' +
     '.sig{text-align:right}' +
     '.muted{color:#64748b;font-size:10.5px;margin-top:6px}' +
-    '.tc-block{margin-top:18px;page-break-inside:avoid}' +
-    '.tc-block h3,.pay-block h3{margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #0f172a;padding-bottom:3px;font-weight:800}' +
+    '.tc-block{margin-top:28px;padding-top:8px;page-break-inside:avoid;break-inside:avoid}' +
+    '.tc-block h3,.pay-block h3{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #0f172a;padding-bottom:4px;font-weight:800;page-break-after:avoid}' +
     '.tc-list{margin:0;padding-left:16px;font-size:9.5px;color:#334155}' +
     '.tc-list li{margin-bottom:3px}' +
-    '.pay-block{margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;background:#f8fafc;page-break-inside:avoid}' +
+    '.pay-block{margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;background:#f8fafc;page-break-inside:avoid;break-inside:avoid}' +
     '.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;font-size:10.5px}' +
     '.pay-grid .k{color:#64748b;display:block;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}' +
     '.pay-grid .v{font-weight:600}' +

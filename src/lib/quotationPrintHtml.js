@@ -38,10 +38,10 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   const validityDisp = formatDisplayDate(quote.validity_date)
   function esc(s) {
     return String(s ?? '')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
+      .replace(/&/g, '&' + 'amp;')
+      .replace(/</g, '&' + 'lt;')
+      .replace(/>/g, '&' + 'gt;')
+      .replace(/"/g, '&' + 'quot;')
   }
   let sl = 0
   let bodyRows = ''

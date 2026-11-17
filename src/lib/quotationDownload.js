@@ -1,12 +1,14 @@
 import { formatQuotePrintHtml } from './quotationPrintHtml'
 import { customerQuoteNo } from './quotationMath'
+import { getQuoteLogoUrl } from './brandLogo'
 
 /**
  * Professional PDF for email.
  * Scale 2.0 + JPEG 0.88 keeps text sharp; typical size still email-friendly for most quotes.
  */
 export async function downloadQuotePdf(quote, opts = {}) {
-  const html = formatQuotePrintHtml(quote, opts)
+  const merged = { ...opts, logoDataUrl: opts.logoDataUrl && String(opts.logoDataUrl).startsWith('data:') ? opts.logoDataUrl : (getQuoteLogoUrl() || opts.logoDataUrl) }
+  const html = formatQuotePrintHtml(quote, merged)
   if (!html) return { error: { message: 'Nothing to export' } }
   const qno = customerQuoteNo(quote) || 'quotation'
   const safeName = String(qno).replace(/[^\w.\-]+/g, '_') + '.pdf'

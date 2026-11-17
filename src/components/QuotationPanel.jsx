@@ -183,14 +183,12 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
       const driverKeys = ['min_margin_pct', 'margin_pct', 'transfer_price', 'quantity']
       if (changed && (changed.line_type || 'product') === 'product' && driverKeys.includes(key)) {
         const prod = items.find(it => it.id === id) || changed
-        if (g => true) {
-          const g = groupRollup(prod, items)
-          if (g.customerTotal > 0 || g.transferTotal > 0) {
-            const unit = g.unitCustomer != null
-              ? g.unitCustomer
-              : (g.qty > 0 ? Math.round((g.customerTotal / g.qty) * 100) / 100 : g.customerTotal)
-            items = items.map(it => it.id === id ? { ...it, customer_price: unit } : it)
-          }
+        const g = groupRollup(prod, items)
+        if (g.customerTotal > 0 || g.transferTotal > 0) {
+          const unit = g.unitCustomer != null
+            ? g.unitCustomer
+            : (g.qty > 0 ? Math.round((g.customerTotal / g.qty) * 100) / 100 : g.customerTotal)
+          items = items.map(it => it.id === id ? { ...it, customer_price: unit } : it)
         }
       }
       if (changed && changed.line_type === 'upgrade' && (key === 'margin_pct' || key === 'min_margin_pct' || key === 'transfer_price' || key === 'quantity')) {

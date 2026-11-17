@@ -1,5 +1,13 @@
 /** Brand assets for quotation PDF / print */
-export { HEXAGON_LOGO_DATA_URL } from './brandLogo'
+export {
+  HEXAGON_LOGO_DATA_URL,
+  DEFAULT_LOGO_PATH,
+  getQuoteLogoUrl,
+  resizeLogoFile,
+  saveQuoteLogo,
+  clearQuoteLogo,
+  LOGO_STORAGE_KEY,
+} from './brandLogo'
 export { HEXAGON_PARTNERS_DATA_URL } from './brandPartners'
 export const HEXAGON_SIGNATURE_DATA_URL = ''
 

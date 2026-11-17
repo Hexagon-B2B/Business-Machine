@@ -10,6 +10,7 @@ function formatDisplayDate(iso) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear()
 }
+
 export function formatQuotePrintHtml(quote, opts = {}) {
   if (!quote) return ''
   const items = quote.quotation_items || []
@@ -36,7 +37,11 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   const dated = formatDisplayDate(quote.created_at || new Date().toISOString())
   const validityDisp = formatDisplayDate(quote.validity_date)
   function esc(s) {
-    return String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
   }
   let sl = 0
   let bodyRows = ''
@@ -46,7 +51,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     const name = (g.base.product_name || 'Product').trim()
     const spec = [g.base.brand, g.base.specification].filter(Boolean).join(' · ')
     const ups = (g.upgrades || []).map(u => (u.product_name || '').trim()).filter(Boolean)
-    bodyRows += '<tr><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' + esc(name) + '</div>' +
+    bodyRows += '<tr class="item-row"><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' + esc(name) + '</div>' +
       (spec ? '<div class="pspec">' + esc(spec) + '</div>' : '') +
       (ups.length ? '<div class="pinc"><strong>Additional to base configuration:</strong> ' + esc(ups.join('; ')) + '</div>' : '') +
       '</td><td class="num">' + g.qty + '</td><td class="num">' + Number(rate).toLocaleString('en-IN') +
@@ -60,7 +65,7 @@ export function formatQuotePrintHtml(quote, opts = {}) {
       const rate = g.unitCustomer != null ? g.unitCustomer : (g.qty ? Math.round((g.customerTotal / g.qty) * 100) / 100 : 0)
       const name = (g.base.product_name || 'Product').trim()
       const spec = [g.base.brand, g.base.specification].filter(Boolean).join(' · ')
-      bodyRows += '<tr><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' + esc(name) +
+      bodyRows += '<tr class="item-row"><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' + esc(name) +
         ' <span class="opt">(Optional)</span></div>' + (spec ? '<div class="pspec">' + esc(spec) + '</div>' : '') +
         '</td><td class="num">' + g.qty + '</td><td class="num">' + Number(rate).toLocaleString('en-IN') +
         '</td><td class="num amt">' + Number(g.customerTotal || 0).toLocaleString('en-IN') + '</td></tr>'
@@ -69,24 +74,24 @@ export function formatQuotePrintHtml(quote, opts = {}) {
   for (const c of items.filter(it => it.line_type === 'charge')) {
     sl += 1
     const amt = (Number(c.quantity) || 1) * (Number(c.customer_price) || 0)
-    bodyRows += '<tr><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' +
+    bodyRows += '<tr class="item-row"><td class="sl">' + sl + '</td><td class="desc"><div class="pname">' +
       esc(c.product_name || c.charge_kind || 'Charge') + '</div></td><td class="num">' + (c.quantity || 1) +
       '</td><td class="num">' + Number(c.customer_price || 0).toLocaleString('en-IN') +
       '</td><td class="num amt">' + Number(amt).toLocaleString('en-IN') + '</td></tr>'
   }
   const total = Number(quote.total_value || 0).toLocaleString('en-IN')
   const tcHtml =
-    '<div class="tc-block"><h3>Terms & Conditions</h3><ol class="tc-list">' +
+    '<div class="tc-block"><h3>Terms &amp; Conditions</h3><ol class="tc-list">' +
     '<li><strong>Validity:</strong> This quotation is valid for the period stated above, unless withdrawn earlier by written notice.</li>' +
     '<li><strong>Prices:</strong> Prices are in INR and exclusive of applicable taxes unless stated otherwise. Taxes will be charged extra as per prevailing rates.</li>' +
-    '<li><strong>PO & Acceptance:</strong> A firm PO quoting the HEXAGON B2B SOLUTIONS quotation reference is required for order processing, along with complete Bill To/Ship To, GST/PAN and contact details.</li>' +
+    '<li><strong>PO &amp; Acceptance:</strong> A firm PO quoting the HEXAGON B2B SOLUTIONS quotation reference is required for order processing, along with complete Bill To/Ship To, GST/PAN and contact details.</li>' +
     '<li><strong>Delivery:</strong> Delivery timelines are indicative and subject to OEM/vendor stock and logistics. Risk passes on delivery to the carrier or customer location as agreed.</li>' +
     '<li><strong>Payment:</strong> As per payment terms stated in this quotation. Delayed payment may attract interest and/or hold on support/services.</li>' +
     '<li><strong>Warranty:</strong> Manufacturer/OEM warranty applies as offered by the OEM unless a separate Hexagon warranty is expressly stated in writing.</li>' +
     '<li><strong>Compatibility:</strong> Products/solutions are supplied as per the customer\'s specified requirement. HEXAGON B2B SOLUTIONS shall not be responsible for incompatibility arising from customer requirements or third-party products.</li>' +
     '<li><strong>Returns:</strong> Returns are subject to OEM policy and prior written approval. Opened software licenses are non-returnable.</li>' +
     '<li><strong>Ownership:</strong> Goods/materials/licenses remain the property of HEXAGON B2B SOLUTIONS until full payment of the applicable invoice.</li>' +
-    '<li><strong>Terms:</strong> In case of conflict, the T&C stated in this quotation shall prevail unless otherwise agreed and accepted in writing by HEXAGON B2B SOLUTIONS.</li>' +
+    '<li><strong>Terms:</strong> In case of conflict, the T&amp;C stated in this quotation shall prevail unless otherwise agreed and accepted in writing by HEXAGON B2B SOLUTIONS.</li>' +
     '<li><strong>Force Majeure:</strong> HEXAGON B2B SOLUTIONS shall not be liable for delays/non-performance due to circumstances beyond its reasonable control, including OEM/vendor delays, government restrictions, natural calamities, strikes, war or other force majeure events.</li>' +
     '<li><strong>Jurisdiction:</strong> All disputes are subject to Mysuru, Karnataka jurisdiction.</li>' +
     '</ol></div>'
@@ -104,40 +109,44 @@ export function formatQuotePrintHtml(quote, opts = {}) {
       '<img src="' + partners + '" alt="Trusted Technology Partners"/></div>'
     : ''
   return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Quotation ' + esc(qno) + '</title><style>' +
-    'body{font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:24px;font-size:12.5px;line-height:1.45}' +
+    'body{font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:20px;font-size:12px;line-height:1.4}' +
     '.doc{max-width:720px;margin:0 auto}' +
-    '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px;border-bottom:2px solid #0f172a;padding-bottom:12px}' +
-    '.logo-wrap{flex:0 0 auto;max-width:280px;max-height:72px}' +
-    '.logo-wrap img,.logo{max-width:280px;max-height:72px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
-    '.doc-title{text-align:right}.doc-title .label{font-size:10px;letter-spacing:.14em;font-weight:700;color:#64748b;text-transform:uppercase}' +
-    '.doc-title h1{margin:2px 0 0;font-size:22px;letter-spacing:.04em}' +
-    '.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-bottom:12px}' +
-    '.box{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#f8fafc}' +
-    '.box h3{margin:0 0 6px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#64748b}' +
-    '.box .v{font-size:14px;font-weight:700}' +
-    '.terms{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
-    '.term{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px}.term label{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:2px}' +
-    'table{width:100%;border-collapse:collapse;margin-top:4px}th{background:#f1f5f9;text-align:left;padding:7px 8px;font-size:11px;border-bottom:1px solid #cbd5e1}' +
-    'td{padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}.sl{width:36px;color:#64748b}.num{text-align:right;white-space:nowrap}.amt{font-weight:600}' +
-    '.pname{font-weight:600}.pspec{font-size:11px;color:#475569;margin-top:2px}.pinc{font-size:11px;color:#64748b;margin-top:3px}' +
-    '.sec td{background:#f8fafc;font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#475569}' +
-    '.opt{font-size:11px;color:#b45309;font-weight:600}' +
-    '.totals{margin-top:12px;margin-left:auto;width:280px}.totals div{display:flex;justify-content:space-between;padding:3px 0}.totals .grand{font-weight:800;font-size:14px;border-top:2px solid #0f172a;margin-top:6px;padding-top:8px}' +
-    '.foot{display:flex;justify-content:space-between;margin-top:22px;gap:20px}.sig{text-align:right}.muted{color:#64748b;font-size:11px;margin-top:8px}' +
-    '.tc-block{margin-top:22px;page-break-inside:avoid}.tc-block h3,.pay-block h3{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #0f172a;padding-bottom:4px}' +
-    '.tc-list{margin:0;padding-left:18px;font-size:10.5px;color:#334155}.tc-list li{margin-bottom:4px}' +
-    '.pay-block{margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;page-break-inside:avoid}' +
-    '.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:11px}.pay-grid .k{color:#64748b;display:block;font-size:9px;text-transform:uppercase;letter-spacing:.06em}.pay-grid .v{font-weight:600}' +
-    '.pay-note{margin-top:8px;font-size:11px;color:#475569}' +
-    '.partners{margin-top:18px;text-align:center;page-break-inside:avoid}.partners-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:8px}' +
-    '.partners img{max-width:100%;height:auto;max-height:110px;object-fit:contain}' +
+    '.top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px;border-bottom:2px solid #0f172a;padding-bottom:10px}' +
+    '.logo-wrap{flex:0 0 auto;max-width:260px;max-height:64px}' +
+    '.logo-wrap img,.logo{max-width:260px;max-height:64px;width:auto;height:auto;object-fit:contain;object-position:left center;display:block}' +
+    '.doc-title{text-align:right}.doc-title .label{font-size:9px;letter-spacing:.14em;font-weight:700;color:#64748b;text-transform:uppercase}' +
+    '.doc-title h1{margin:2px 0 0;font-size:20px;letter-spacing:.04em}' +
+    '.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:10px}' +
+    '.box{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;background:#f8fafc}' +
+    '.box h3{margin:0 0 4px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#64748b}' +
+    '.box .v{font-size:13px;font-weight:700}' +
+    '.terms{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}' +
+    '.term{border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px}.term label{display:block;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:2px}' +
+    'table{width:100%;border-collapse:collapse;margin-top:4px}' +
+    'th{background:#f1f5f9;text-align:left;padding:6px 7px;font-size:10px;border-bottom:1px solid #cbd5e1}' +
+    'td{padding:6px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top}' +
+    'tr.item-row{page-break-inside:avoid;break-inside:avoid}' +
+    'tbody tr.item-row:nth-child(even){background:#f8fafc}' +
+    '.sl{width:32px;color:#64748b}.num{text-align:right;white-space:nowrap}.amt{font-weight:600}' +
+    '.pname{font-weight:600}.pspec{font-size:10px;color:#475569;margin-top:1px}.pinc{font-size:10px;color:#64748b;margin-top:2px}' +
+    '.sec td{background:#f1f5f9;font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#475569}' +
+    '.opt{font-size:10px;color:#b45309;font-weight:600}' +
+    '.totals{margin-top:10px;margin-left:auto;width:260px}.totals div{display:flex;justify-content:space-between;padding:2px 0}.totals .grand{font-weight:800;font-size:13px;border-top:2px solid #0f172a;margin-top:4px;padding-top:6px}' +
+    '.foot{display:flex;justify-content:space-between;margin-top:18px;gap:16px}.sig{text-align:right}.muted{color:#64748b;font-size:10px;margin-top:6px}' +
+    '.tc-block{margin-top:16px;page-break-inside:avoid}.tc-block h3,.pay-block h3{margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #0f172a;padding-bottom:3px}' +
+    '.tc-list{margin:0;padding-left:16px;font-size:9.5px;color:#334155}.tc-list li{margin-bottom:3px}' +
+    '.pay-block{margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;background:#f8fafc;page-break-inside:avoid}' +
+    '.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:10px}.pay-grid .k{color:#64748b;display:block;font-size:8px;text-transform:uppercase;letter-spacing:.06em}.pay-grid .v{font-weight:600}' +
+    '.pay-note{margin-top:6px;font-size:10px;color:#475569}' +
+    '.partners{margin-top:14px;text-align:center;page-break-inside:avoid}.partners-label{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:6px}' +
+    '.partners img{max-width:100%;height:auto;max-height:90px;object-fit:contain}' +
     '</style></head><body><div class="doc">' +
-    '<div class="top"><div>' + (logo ? '<div class="logo-wrap"><img class="logo" src="' + logo + '" alt="Hexagon B2B Solutions"/></div>' : '<div style="font-weight:800;font-size:18px;color:#1e3a8a">HEXAGON B2B SOLUTIONS</div>') +
-    '</div><div class="doc-title"><div class="label">Commercial document</div><h1>QUOTATION</h1><div style="margin-top:6px;font-size:12px;color:#475569">Dated ' + esc(dated) + '</div></div></div>' +
+    '<div class="top"><div>' + (logo ? '<div class="logo-wrap"><img class="logo" src="' + logo + '" alt="Hexagon B2B Solutions"/></div>' : '<div style="font-weight:800;font-size:16px;color:#1e3a8a">HEXAGON B2B SOLUTIONS</div>') +
+    '</div><div class="doc-title"><div class="label">Commercial document</div><h1>QUOTATION</h1><div style="margin-top:4px;font-size:11px;color:#475569">Dated ' + esc(dated) + '</div></div></div>' +
     '<div class="meta"><div class="box"><h3>Prepared for</h3><div class="v">' + esc(companyName) + '</div>' +
-    (companyCity ? '<div style="margin-top:2px;color:#475569;font-size:12px">' + esc(companyCity) + '</div>' : '') +
-    (attentionTo ? '<div style="margin-top:6px;font-size:12.5px"><strong>Kind Attention to:</strong> ' + esc(attentionTo) + '</div>' : '') +
-    (oppName ? '<div style="margin-top:4px;color:#64748b;font-size:11.5px">Ref: ' + esc(oppName) + '</div>' : '') +
+    (companyCity ? '<div style="margin-top:2px;color:#475569;font-size:11px">' + esc(companyCity) + '</div>' : '') +
+    (attentionTo ? '<div style="margin-top:4px;font-size:12px"><strong>Kind Attention to:</strong> ' + esc(attentionTo) + '</div>' : '') +
+    (oppName ? '<div style="margin-top:3px;color:#64748b;font-size:11px">Ref: ' + esc(oppName) + '</div>' : '') +
     '</div><div class="box"><h3>Quotation details</h3><div><strong>Quote No.:</strong> ' + esc(qno) +
     '</div><div><strong>Status:</strong> ' + esc((quote.status || 'draft').toUpperCase()) + '</div></div></div>' +
     '<div class="terms">' +
@@ -149,11 +158,11 @@ export function formatQuotePrintHtml(quote, opts = {}) {
     bodyRows + '</tbody></table>' +
     '<div class="totals"><div><span>Subtotal (ex-tax)</span><span>₹ ' + total + '</span></div>' +
     '<div class="grand"><span>Quoted value</span><span>₹ ' + total + '</span></div></div>' +
-    (quote.revision_reason ? '<div style="margin-top:14px"><strong>Revision</strong><div class="muted">' + esc(quote.revision_reason) + '</div></div>' : '') +
-    '<div class="foot"><div><div>For ' + esc(companyName) + '</div><div class="muted" style="margin-top:36px">Authorised signatory</div></div>' +
-    '<div class="sig"><div>For ' + esc(signatory.company) + '</div><div style="font-weight:700;margin-top:8px">' + esc(signatory.name) + '</div>' +
+    (quote.revision_reason ? '<div style="margin-top:12px"><strong>Revision</strong><div class="muted">' + esc(quote.revision_reason) + '</div></div>' : '') +
+    '<div class="foot"><div><div>For ' + esc(companyName) + '</div><div class="muted" style="margin-top:28px">Authorised signatory</div></div>' +
+    '<div class="sig"><div>For ' + esc(signatory.company) + '</div><div style="font-weight:700;margin-top:6px">' + esc(signatory.name) + '</div>' +
     '<div>' + esc(signatory.title) + '</div><div>M: ' + esc(signatory.phone) + '</div><div>' + esc(signatory.email) + '</div></div></div>' +
     tcHtml + payHtml + partnersHtml +
-    '<div class="muted" style="margin-top:12px;text-align:center">This is a computer-generated quotation from Hexagon B2B Solutions.</div>' +
+    '<div class="muted" style="margin-top:10px;text-align:center">This is a computer-generated quotation from Hexagon B2B Solutions.</div>' +
     '</div></body></html>'
 }

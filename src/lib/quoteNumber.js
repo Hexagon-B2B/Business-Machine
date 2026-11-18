@@ -1,6 +1,9 @@
-/** Quote numbering: HB2B-{FY}-{CustomerInitials}-{seq}-Vn
+/** Quote numbering: HB2B-{FY}-{CustomerInitials}-{seq}
  *  Sequence is per customer per Indian financial year (Apr–Mar).
+ *  Each company starts at 001 and increments for every NEW quote number
+ *  (revisions keep the same base number and bump -Vn).
  */
+
 export function indianFy(d = new Date()) {
   const y = d.getFullYear()
   const m = d.getMonth() + 1
@@ -8,7 +11,7 @@ export function indianFy(d = new Date()) {
   return String(start) + '-' + String(start + 1).slice(2)
 }
 
-/** Initials from legal name (preferred) or short name — e.g. "Micron Memory Pvt Ltd" → MMPL */
+/** Initials from legal name (preferred) or short name — e.g. "Micron Electronic Pvt Ltd" → MEPL */
 export function companyInitials(legalName, shortName) {
   const src = String(legalName || shortName || 'CUST').trim()
   const parts = src.split(/[\s.,&\-/]+/).filter(Boolean)
@@ -21,8 +24,8 @@ export function companyInitials(legalName, shortName) {
 
 /**
  * Next quotation number for a company in the current FY.
- * @param existingQuotes - all quotes for this company (any opportunity), to compute sequence
- * @param opts.legalName / opts.shortName - customer company names for initials
+ * Sequence counts ALL quotes for this company in the FY (any historical
+ * initials variant still contributes to max), so we never re-issue 001.
  */
 export function nextQuoteNo(existingQuotes, { legalName, shortName } = {}) {
   const fy = indianFy()
@@ -31,8 +34,10 @@ export function nextQuoteNo(existingQuotes, { legalName, shortName } = {}) {
   let max = 0
   for (const q of existingQuotes || []) {
     const raw = String(q.quotation_no || '').replace(/-V\d+$/i, '')
-    if (raw.startsWith(prefix)) {
-      const n = parseInt(raw.slice(prefix.length), 10)
+    // Accept any customer-code segment so older mismatches still increment the seq
+    const m = raw.match(/^HB2B-(\d{4}-\d{2})-([A-Z0-9]+)-(\d+)$/i)
+    if (m && m[1] === fy) {
+      const n = parseInt(m[3], 10)
       if (!Number.isNaN(n) && n > max) max = n
     }
   }

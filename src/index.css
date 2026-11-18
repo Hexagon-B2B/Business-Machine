@@ -15,7 +15,6 @@ a { color: #2563eb; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
-/* —— Buttons —— */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 44px;
@@ -27,53 +26,40 @@ button { -webkit-tap-highlight-color: transparent; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 .btn.primary {
-  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
-  color: #fff; border-color: #1d4ed8;
-  box-shadow: 0 1px 2px rgba(37,99,235,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #fff !important;
+  border-color: #1e40af;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .btn.primary:hover {
-  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-  border-color: #1e40af;
+  background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
+  border-color: #1e3a8a;
 }
 .btn.success {
-  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
-  color: #fff; border-color: #059669;
-  box-shadow: 0 1px 2px rgba(16,185,129,0.25);
-}
-.btn.success:hover {
-  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  color: #fff !important;
+  border-color: #047857;
 }
 .btn.accent {
-  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
-  color: #fff; border-color: #4f46e5;
+  background: linear-gradient(180deg, #818cf8 0%, #4f46e5 100%);
+  color: #fff !important;
+  border-color: #4338ca;
 }
-.btn.accent:hover {
-  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
-}
-.btn.danger { color: #dc2626; border-color: #fecaca; background: #fff; }
+.btn.danger { color: #dc2626; border-color: #fecaca; }
 .btn.danger:hover { background: #fef2f2; }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover { background: #f1f5f9; }
 
-/* —— Cards —— */
 .card {
   background: #fff;
-  border: 1px solid #d8e0ea;
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 14px;
   padding: 16px;
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 6px 16px rgba(15, 23, 42, 0.04);
-  position: relative;
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.03);
 }
-.card.section {
-  border-left: 4px solid #3b82f6;
-}
-.card.section-green { border-left-color: #10b981; }
-.card.section-amber { border-left-color: #f59e0b; }
-.card.section-violet { border-left-color: #8b5cf6; }
 
-/* —— Inputs —— */
 .input {
   width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd5e1;
   border-radius: 11px; font-size: 16px; background: #fff;
@@ -98,7 +84,7 @@ select.input { appearance: auto; }
 .table { width: 100%; border-collapse: collapse; min-width: 640px; }
 .table th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  color: #64748b; padding: 5px 8px; border-bottom: 2px solid #cbd5e1;
+  color: #64748b; padding: 5px 8px; border-bottom: 1px solid #e2e8f0;
   background: #f8fafc; position: sticky; top: 0; z-index: 1; cursor: pointer; user-select: none; white-space: nowrap;
 }
 .table th:hover { color: #0f172a; }
@@ -121,6 +107,13 @@ select.input { appearance: auto; }
 .badge.yellow { background: #fef9c3; color: #854d0e; }
 .badge.red { background: #fee2e2; color: #991b1b; }
 .badge.gray { background: #f1f5f9; color: #475569; }
+.badge.slate { background: #e2e8f0; color: #334155; }
+.badge.indigo { background: #e0e7ff; color: #3730a3; }
+.badge.purple { background: #ede9fe; color: #5b21b6; }
+.badge.cyan { background: #cffafe; color: #155e75; }
+.badge.orange { background: #ffedd5; color: #c2410c; }
+.badge.teal { background: #ccfbf1; color: #0f766e; }
+.badge.pink { background: #fce7f3; color: #9d174d; }
 .empty { text-align: center; padding: 40px 20px; color: #64748b; font-size: 14px; }
 .loading { text-align: center; padding: 40px; color: #64748b; }
 .notice {
@@ -135,7 +128,6 @@ select.input { appearance: auto; }
 .opp-card:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37,99,235,0.08); }
 .link-list a { display: block; padding: 10px 0; font-size: 14px; min-height: 44px; }
 
-/* —— App shell —— */
 .app-shell {
   display: flex;
   min-height: 100vh;
@@ -202,7 +194,6 @@ select.input { appearance: auto; }
   background: linear-gradient(90deg, rgba(37, 99, 235, 0.25), rgba(30, 41, 59, 0.9));
   color: #fff;
   box-shadow: inset 3px 0 0 #3b82f6;
-  border-left: 3px solid #60a5fa;
 }
 .nav-footer {
   padding: 16px 20px;
@@ -217,23 +208,21 @@ select.input { appearance: auto; }
   white-space: nowrap;
 }
 
-/* Soft geometric mesh on main canvas */
 .app-main {
   flex: 1;
   overflow: auto;
   min-width: 0;
-  background-color: transparent;
+  background-color: #eef2f7;
   background-image:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(59, 130, 246, 0.1), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(14, 165, 233, 0.08), transparent 50%),
-    radial-gradient(ellipse 50% 30% at 50% 100%, rgba(99, 102, 241, 0.06), transparent 50%),
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(59, 130, 246, 0.09), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(14, 165, 233, 0.07), transparent 50%),
+    radial-gradient(ellipse 50% 30% at 50% 100%, rgba(99, 102, 241, 0.05), transparent 50%),
+    linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
   background-size: auto, auto, auto, 48px 48px, 48px 48px;
   background-attachment: local;
 }
 
-/* —— Modal —— */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -248,41 +237,19 @@ select.input { appearance: auto; }
     rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  animation: modal-fade-in 0.18s ease-out;
 }
 .modal-panel {
-  animation: modal-rise 0.2s ease-out;
   box-shadow:
     0 4px 6px rgba(15, 23, 42, 0.05),
     0 20px 40px rgba(15, 23, 42, 0.18);
   border: 1px solid rgba(226, 232, 240, 0.95);
 }
-.modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #f1f5f9;
-}
-.modal-close {
-  font-size: 22px;
-  line-height: 1;
-  min-height: 36px;
-  width: 36px;
-  padding: 0;
-  border-radius: 8px;
-  color: #64748b;
-}
-.modal-close:hover { color: #0f172a; background: #f1f5f9; }
 
-@keyframes modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes modal-rise {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.quoted-items-table td,
+.table.quoted-items-table td {
+  white-space: normal;
+  vertical-align: top;
+  line-height: 1.35;
 }
 
 @media (max-width: 900px) {
@@ -310,17 +277,6 @@ select.input { appearance: auto; }
     font-size: 22px;
     cursor: pointer;
     flex-shrink: 0;
-  }
-  .mobile-bar-title {
-    font-size: 15px;
-    font-weight: 700;
-    min-width: 0;
-  }
-  .mobile-bar-eyebrow {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: #94a3b8;
   }
   .nav-backdrop {
     display: block;
@@ -359,17 +315,9 @@ select.input { appearance: auto; }
     cursor: pointer;
   }
   .app-main { width: 100%; }
-  .app-main > div { padding: 14px !important; }
-  .page-head h1 { font-size: 18px !important; }
+  .table-wrap {
+    margin: 0 -4px;
+    -webkit-overflow-scrolling: touch;
+  }
   .table { min-width: 720px; }
-  .table-wrap { max-height: none; margin: 0 -4px; }
-  .stage { min-width: 160px; }
-  .card { padding: 14px; }
-  .pager .btn { min-height: 44px; min-width: 44px; }
-}
-
-@media (max-width: 480px) {
-  .btn { padding: 10px 12px; font-size: 13px; }
-  .table th, .table td { padding: 3px 6px; font-size: 12px; }
-  .page-head { margin-bottom: 12px; }
 }

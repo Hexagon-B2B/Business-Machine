@@ -37,9 +37,9 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return
-    if (localStorage.getItem('hb2b_quote_nos_migrated_v1')) return
+    if (localStorage.getItem('hb2b_quote_nos_migrated_v2')) return
     migrateAllQuoteNumbers().then(r => {
-      if (r && (r.ok || r.updated > 0)) localStorage.setItem('hb2b_quote_nos_migrated_v1', '1')
+      if (r && (r.ok || r.updated > 0)) localStorage.setItem('hb2b_quote_nos_migrated_v2', '1')
       if (r && r.updated) console.info('Quote numbers migrated:', r.updated)
     }).catch(() => {})
   }, [session])
@@ -78,31 +78,19 @@ export default function App() {
     ['settings', 'Settings'],
   ]
 
-  const roleTag = access.profile?.role === 'admin'
-    ? 'Admin'
-    : access.profile?.role === 'service'
-      ? 'Service'
-      : access.profile?.role === 'sales'
-        ? 'Sales'
-        : null
-
-  const pageLabel = page === 'company'
-    ? 'Company'
-    : (nav.find(([id]) => id === page)?.[1] || 'Hexagon B2B')
+  const roleTag = access.isAdmin ? 'Admin' : access.isService ? 'Service' : access.isSales ? 'Sales' : null
 
   return (
     <AuthCtx.Provider value={access}>
       <div className="app-shell">
-        <header className="mobile-bar">
+        <div className="mobile-bar">
           <button type="button" className="menu-toggle" aria-label="Open menu" onClick={() => setMenuOpen(true)}>☰</button>
           <div className="mobile-bar-title">
-            <div className="mobile-bar-eyebrow">HEXAGON B2B{roleTag ? ` · ${roleTag}` : ''}</div>
-            <div>{pageLabel}</div>
+            <div className="mobile-bar-eyebrow">HEXAGON B2B</div>
+            <div>{nav.find(([id]) => id === page || (page === 'company' && id === 'companies'))?.[1] || 'Hexagon'}</div>
           </div>
-        </header>
-
+        </div>
         {menuOpen && <div className="nav-backdrop" onClick={() => setMenuOpen(false)} />}
-
         <aside className={`app-nav ${menuOpen ? 'open' : ''}`}>
           <div className="nav-brand">
             <div className="nav-brand-eyebrow">HEXAGON B2B</div>

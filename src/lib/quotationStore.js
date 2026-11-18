@@ -224,7 +224,7 @@ export function formatQuoteForExcel(quote, { taxPct = DEFAULT_TAX_PCT } = {}) {
   return header + '\n' + lines.join('\n')
 }
 
-/** One-time: rewrite stored quotation_no values to HB2B-{FY}-{CUST}-SEQ (keeps version on the quote). */
+/** One-time: rewrite stored quotation_no to HB2B-{FY}-{CUST}-SEQ unique per independent quote (revisions share base). */
 export async function migrateAllQuoteNumbers() {
   const { data: companies, error: cErr } = await supabase.from('companies').select('id, name, legal_name')
   if (cErr) return { ok: false, error: cErr, updated: 0 }
@@ -249,31 +249,32 @@ export async function migrateAllQuoteNumbers() {
       if (da !== db) return da.localeCompare(db)
       return (Number(a.quote.version) || 1) - (Number(b.quote.version) || 1)
     })
-    const fySeq = {}
-    const familyNo = {}
     const cust = companyInitials(co.legal_name, co.name)
     function fyOf(iso) {
       const d = iso ? new Date(iso) : new Date()
       if (Number.isNaN(d.getTime())) return indianFy()
       return indianFy(d)
     }
-    for (const { quote: q } of items) {
-      const raw = String(q.quotation_no || '').replace(/-V\d+$/i, '')
-      if (raw.startsWith('HB2B-')) {
-        const m = raw.match(/^HB2B-(\d{4}-\d{2})-[A-Z0-9]+-(\d+)$/i)
-        if (m) {
-          const fy = m[1]
-          const n = parseInt(m[2], 10)
-          if (!fySeq[fy] || n >= fySeq[fy]) fySeq[fy] = n
-          familyNo[raw] = raw
-        }
-        continue
-      }
-      if (familyNo[raw]) continue
+    const idToBase = {}
+    const fySeq = {}
+    for (const { oppId, quote: q } of items) {
+      const ver = Number(q.version) || 1
       const fy = fyOf(q.created_at)
+      if (ver > 1) {
+        let inherited = null
+        for (const x of items) {
+          if (x.oppId !== oppId || x.quote.id === q.id) continue
+          const xv = Number(x.quote.version) || 1
+          if (xv < ver && idToBase[x.quote.id]) inherited = idToBase[x.quote.id]
+        }
+        if (inherited) {
+          idToBase[q.id] = inherited
+          continue
+        }
+      }
       const next = (fySeq[fy] || 0) + 1
       fySeq[fy] = next
-      familyNo[raw] = `HB2B-${fy}-${cust}-` + String(next).padStart(3, '0')
+      idToBase[q.id] = `HB2B-${fy}-${cust}-` + String(next).padStart(3, '0')
     }
     for (const o of opps || []) {
       const meta = { ...(o.metadata || {}) }
@@ -281,11 +282,11 @@ export async function migrateAllQuoteNumbers() {
       if (!qs.length) continue
       let changed = false
       const nextQs = qs.map(q => {
-        const raw = String(q.quotation_no || '').replace(/-V\d+$/i, '')
-        const neu = familyNo[raw]
-        if (!neu || neu === raw) return q
+        const neu = idToBase[q.id]
+        const cur = String(q.quotation_no || '').replace(/-V\d+$/i, '')
+        if (!neu || neu === cur) return q
         changed = true
-        return { ...q, quotation_no: neu, previous_quotation_no: q.quotation_no }
+        return { ...q, quotation_no: neu, previous_quotation_no: q.quotation_no || q.previous_quotation_no }
       })
       if (!changed) continue
       meta.quotes = nextQs

@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import { useState, useEffect, useRef } from 'react'
 
-export function PageHead({ eyebrow, title, subtitle, children }) {
+export function PageHead({ eyebrow, title, subtitle, children, actions }) {
+  const right = actions ?? children
   return (
     <div className="page-head">
       <div>
@@ -9,7 +10,7 @@ export function PageHead({ eyebrow, title, subtitle, children }) {
         <h1 style={{ fontSize: 22 }}>{title}</h1>
         {subtitle && <p style={{ color: '#64748b', fontSize: 14 }}>{subtitle}</p>}
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{children}</div>
+      {right ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{right}</div> : null}
     </div>
   )
 }
@@ -119,7 +120,25 @@ export function Modal({ title, children, onClose, width = 480, closeOnBackdrop =
       <div className="modal-panel card" style={{ width, maxWidth: '94vw', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h2 style={{ fontSize: 17 }}>{title}</h2>
-          <button type="button" className="btn ghost modal-close" onClick={onClose} aria-label="Close">×</button>
+          <button
+            type="button"
+            className="btn modal-close"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+            style={{
+              minWidth: 40,
+              minHeight: 40,
+              fontSize: 22,
+              lineHeight: 1,
+              fontWeight: 700,
+              color: '#0f172a',
+              background: '#f1f5f9',
+              border: '1px solid #cbd5e1',
+            }}
+          >
+            ×
+          </button>
         </div>
         {children}
       </div>

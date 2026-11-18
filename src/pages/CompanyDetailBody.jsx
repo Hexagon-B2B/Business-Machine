@@ -3,7 +3,7 @@ import { isOwner } from '../access'
 import { isLeft, phoneLine, leftReason } from './companyDetailHelpers'
 import CompanyQuotedItems from '../components/CompanyQuotedItems'
 import { OpportunityDetail, EMPTY_OPP_FORM } from '../components/OpportunityShared'
-import { Badge } from '../ui'
+import { Badge, Modal } from '../ui'
 
 export default function CompanyDetailBody(p) {
   const {
@@ -165,25 +165,32 @@ export default function CompanyDetailBody(p) {
 
       {tab === 'opps' && (
         <div>
-          {selectedOpp ? (
-            <>
-              <div style={{ padding: 12 }}><button type="button" className="btn" onClick={() => setSelectedOpp(null)}>← Back to list</button></div>
-              <OpportunityDetail opportunity={selectedOpp} contacts={activeContacts} onClose={() => setSelectedOpp(null)} onSaved={() => load()} />
-            </>
-          ) : (
-            <table className="table" style={{ width: '100%', fontSize: 13 }}>
-              <thead><tr><th>Name</th><th>Stage</th><th>Deal size</th></tr></thead>
-              <tbody>
-                {opps.map(r => (
-                  <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedOpp(r)}>
-                    <td>{r.name}</td>
-                    <td>{oppStageLabel(r.stage)}</td>
-                    <td>{r.deal_size != null ? Number(r.deal_size).toLocaleString() : '—'}</td>
-                  </tr>
-                ))}
-                {opps.length === 0 && <tr><td colSpan={3} style={{ padding: 16, color: '#64748b' }}>No opportunities</td></tr>}
-              </tbody>
-            </table>
+          <table className="table" style={{ width: '100%', fontSize: 13 }}>
+            <thead><tr><th>Name</th><th>Stage</th><th>Deal size</th></tr></thead>
+            <tbody>
+              {opps.map(r => (
+                <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedOpp(r)}>
+                  <td>{r.name}</td>
+                  <td>{oppStageLabel(r.stage)}</td>
+                  <td>{r.deal_size != null ? Number(r.deal_size).toLocaleString() : '—'}</td>
+                </tr>
+              ))}
+              {opps.length === 0 && <tr><td colSpan={3} style={{ padding: 16, color: '#64748b' }}>No opportunities</td></tr>}
+            </tbody>
+          </table>
+          {selectedOpp && (
+            <Modal
+              title={selectedOpp.name || 'Opportunity'}
+              onClose={() => { setSelectedOpp(null); load && load() }}
+              width={1040}
+            >
+              <OpportunityDetail
+                opportunity={selectedOpp}
+                contacts={activeContacts}
+                onClose={() => { setSelectedOpp(null); load && load() }}
+                onSaved={() => load && load()}
+              />
+            </Modal>
           )}
         </div>
       )}

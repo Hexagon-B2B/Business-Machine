@@ -60,15 +60,16 @@ export const RESEARCH_STATUS = ['NOT_RESEARCHED', 'IN_PROGRESS', 'RESEARCHED', '
 export const ROLES = ['Decision Maker', 'Procurement', 'IT', 'Finance', 'Technical Evaluator', 'Influencer', 'End User', 'Other']
 
 /** Opportunity stages — buyer progress */
-export const OPP_STAGES = ['requirement', 'qualified', 'discovery', 'quotation', 'negotiation', 'approved', 'won', 'lost']
+export const OPP_STAGES = ['requirement', 'qualified', 'discovery', 'quotation', 'negotiation', 'confirmed', 'approved', 'won', 'lost']
 export const OPP_STAGE_META = {
   requirement:   { label: 'Requirement', short: 'Req', hint: 'Initial requirement entered', tone: 'slate', board: '#64748b' },
   qualified:     { label: 'Qualified', short: 'Qual', hint: 'First interaction has started', tone: 'blue', board: '#2563eb' },
   discovery:     { label: 'Discovery', short: 'Disc', hint: 'Taking / thinking of options', tone: 'cyan', board: '#0891b2' },
   quotation:     { label: 'Quotation', short: 'Quote', hint: 'Quotation sent', tone: 'indigo', board: '#4f46e5' },
   negotiation:   { label: 'Negotiation', short: 'Neg', hint: 'Target price or final offer', tone: 'orange', board: '#ea580c' },
-  approved:      { label: 'Approved', short: 'Appr', hint: 'Dispatched on DC', tone: 'purple', board: '#7c3aed' },
-  won:           { label: 'Won', short: 'Won', hint: 'Dispatched on Invoice', tone: 'green', board: '#059669' },
+  confirmed:     { label: 'Confirmed', short: 'Conf', hint: 'Confirmation received — order waiting to execute', tone: 'teal', board: '#0d9488' },
+  approved:      { label: 'Approved (DC)', short: 'DC', hint: 'Delivery challan / dispatch — pending invoice', tone: 'purple', board: '#7c3aed' },
+  won:           { label: 'Won', short: 'Won', hint: 'Invoice entered', tone: 'green', board: '#059669' },
   lost:          { label: 'Lost', short: 'Lost', hint: 'Deal lost', tone: 'red', board: '#dc2626' },
   // legacy aliases (old data)
   qualification: { label: 'Qualified', short: 'Qual', hint: 'First interaction has started', tone: 'blue', board: '#2563eb' },

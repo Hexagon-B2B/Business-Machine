@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 export function PageHead({ eyebrow, title, subtitle, children, actions }) {
   const right = actions ?? children
@@ -33,12 +33,53 @@ export function DataTable({
   page, pageSize, total, onPage, empty,
   selectable = false, selectedIds = null, onToggleSelect, onToggleSelectAll,
 }) {
+  const [localSort, setLocalSort] = useState({ key: null, dir: 'asc' })
+  const activeKey = sortKey != null ? sortKey : localSort.key
+  const activeDir = sortKey != null ? (sortDir || 'asc') : localSort.dir
+
+  function handleSort(key) {
+    if (onSort) {
+      onSort(key)
+      return
+    }
+    setLocalSort(s => ({
+      key,
+      dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const displayRows = useMemo(() => {
+    if (onSort || !activeKey) return rows
+    const col = columns.find(c => c.key === activeKey)
+    const sorted = [...(rows || [])]
+    sorted.sort((a, b) => {
+      let av, bv
+      if (col && col.sortValue) {
+        av = col.sortValue(a)
+        bv = col.sortValue(b)
+      } else {
+        av = a?.[activeKey]
+        bv = b?.[activeKey]
+      }
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'number' && typeof bv === 'number') return activeDir === 'asc' ? av - bv : bv - av
+      const as = String(av).toLowerCase()
+      const bs = String(bv).toLowerCase()
+      if (as < bs) return activeDir === 'asc' ? -1 : 1
+      if (as > bs) return activeDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return sorted
+  }, [rows, activeKey, activeDir, onSort, columns])
+
   const pages = Math.max(1, Math.ceil((total || 0) / pageSize))
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1
   const to = Math.min(page * pageSize, total || 0)
   const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || [])
-  const allOnPageSelected = rows.length > 0 && rows.every(r => selected.has(r.id))
-  const someOnPageSelected = rows.some(r => selected.has(r.id))
+  const allOnPageSelected = displayRows.length > 0 && displayRows.every(r => selected.has(r.id))
+  const someOnPageSelected = displayRows.some(r => selected.has(r.id))
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -52,22 +93,27 @@ export function DataTable({
                     type="checkbox"
                     checked={allOnPageSelected}
                     ref={el => { if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected }}
-                    onChange={() => onToggleSelectAll && onToggleSelectAll(rows, !allOnPageSelected)}
+                    onChange={() => onToggleSelectAll && onToggleSelectAll(displayRows, !allOnPageSelected)}
                     aria-label="Select all on page"
                   />
                 </th>
               )}
               {columns.map(c => (
-                <th key={c.key} onClick={() => onSort && onSort(c.key)}>
-                  {c.label}{sortKey === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                <th
+                  key={c.key}
+                  onClick={() => handleSort(c.key)}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  title={`Sort by ${c.label}`}
+                >
+                  {c.label}{activeKey === c.key ? (activeDir === 'asc' ? ' ↑' : ' ↓') : ''}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {displayRows.length === 0 ? (
               <tr><td colSpan={columns.length + (selectable ? 1 : 0)}><div className="empty">{empty || 'No records'}</div></td></tr>
-            ) : rows.map(r => (
+            ) : displayRows.map(r => (
               <tr key={r.id} style={{ cursor: onRowClick ? 'pointer' : 'default' }} onClick={() => onRowClick && onRowClick(r)}>
                 {selectable && (
                   <td onClick={e => e.stopPropagation()} style={{ width: 40 }}>
@@ -99,7 +145,6 @@ export function DataTable({
 
 export function Modal({ title, children, onClose, width = 480, closeOnBackdrop = false }) {
   useEffect(() => {
-    // Escape close disabled — too easy to dismiss forms mid-edit
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
@@ -113,7 +158,6 @@ export function Modal({ title, children, onClose, width = 480, closeOnBackdrop =
       role="dialog"
       aria-modal="true"
       onClick={e => {
-        // Default OFF: outside click must not close opp/quote forms mid-edit
         if (closeOnBackdrop && e.target === e.currentTarget) onClose && onClose()
       }}
     >
@@ -170,7 +214,9 @@ export function CompanySearchSelect({ companies: companiesProp, value, onChange,
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedLabel, setSelectedLabel] = useState('')
+  const [hi, setHi] = useState(0)
   const wrapRef = useRef(null)
+  const listRef = useRef(null)
 
   useEffect(() => {
     function onDoc(e) {
@@ -271,13 +317,29 @@ export function CompanySearchSelect({ companies: companiesProp, value, onChange,
           value={q}
           required={required && !value}
           placeholder={placeholder}
-          onChange={e => { setQ(e.target.value); setOpen(true) }}
+          onChange={e => { setQ(e.target.value); setOpen(true); setHi(0) }}
           onFocus={() => setOpen(true)}
           autoComplete="off"
+          onKeyDown={e => {
+            if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); return }
+            if (!open) return
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setHi(i => Math.min(i + 1, Math.max(0, results.length - 1)))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setHi(i => Math.max(i - 1, 0))
+            } else if (e.key === 'Enter') {
+              e.preventDefault()
+              if (results[hi]) pick(results[hi])
+            } else if (e.key === 'Escape') {
+              setOpen(false)
+            }
+          }}
         />
       )}
       {open && (
-        <div style={{
+        <div ref={listRef} style={{
           position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 80,
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
           maxHeight: 280, overflowY: 'auto', boxShadow: '0 12px 32px rgba(15,23,42,0.14)',
@@ -288,14 +350,16 @@ export function CompanySearchSelect({ companies: companiesProp, value, onChange,
             <div style={{ padding: 12, fontSize: 13, color: '#64748b' }}>
               {q.trim() ? `No companies match “${q.trim()}” — try fewer letters` : 'Type to filter — list is A–Z'}
             </div>
-          ) : results.map(c => (
+          ) : results.map((c, idx) => (
             <button
               key={c.id}
               type="button"
               onClick={() => pick(c)}
+              onMouseEnter={() => setHi(idx)}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px',
-                border: 0, borderBottom: '1px solid #f1f5f9', background: c.id === value ? '#eff6ff' : '#fff',
+                border: 0, borderBottom: '1px solid #f1f5f9',
+                background: idx === hi ? '#dbeafe' : (c.id === value ? '#eff6ff' : '#fff'),
                 cursor: 'pointer', fontSize: 14, minHeight: 44,
               }}
             >

@@ -35,6 +35,7 @@ function saveVendorToStorage(v, existingId) {
 export function VendorSelect({ value, onChange, vendors = [], onVendorsChange }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState(0)
   const [editVendor, setEditVendor] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', legal_name: '', location: '', brands: '' })
   const list = vendors.length ? vendors : loadVendorsFromStorage()
@@ -45,6 +46,8 @@ export function VendorSelect({ value, onChange, vendors = [], onVendorsChange })
         [v.name, v.legal_name, v.location, v.brands].filter(Boolean).join(' ').toLowerCase().includes(term)
       ).slice(0, 40)
   const exact = list.find(v => String(v.name).toLowerCase() === term)
+  const showAdd = !exact && (q || value || '').trim()
+  const optionCount = filtered.length + (showAdd ? 1 : 0)
 
   function pick(name) {
     onChange(name)
@@ -86,9 +89,26 @@ export function VendorSelect({ value, onChange, vendors = [], onVendorsChange })
         className="input"
         value={open ? q : (value || '')}
         placeholder="Search vendor or type new…"
-        onFocus={() => { setOpen(true); setQ(value || '') }}
-        onChange={e => { setQ(e.target.value); setOpen(true); onChange(e.target.value) }}
+        onFocus={() => { setOpen(true); setQ(value || ''); setHi(0) }}
+        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); onChange(e.target.value) }}
         onBlur={() => setTimeout(() => setOpen(false), 180)}
+        onKeyDown={e => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); return }
+          if (!open) return
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHi(i => Math.min(i + 1, Math.max(0, optionCount - 1)))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHi(i => Math.max(i - 1, 0))
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (hi < filtered.length && filtered[hi]) pick(filtered[hi].name)
+            else if (showAdd) addNew()
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
       />
       {open && (
         <div style={{
@@ -96,8 +116,9 @@ export function VendorSelect({ value, onChange, vendors = [], onVendorsChange })
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
           boxShadow: '0 8px 24px rgba(15,23,42,0.12)', maxHeight: 240, overflow: 'auto',
         }}>
-          {filtered.map(v => (
-            <div key={v.id || v.name} style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #f1f5f9' }}>
+          {filtered.map((v, idx) => (
+            <div key={v.id || v.name} style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #f1f5f9', background: idx === hi ? '#dbeafe' : 'transparent' }}
+              onMouseEnter={() => setHi(idx)}>
               <button type="button"
                 style={{ flex: 1, textAlign: 'left', padding: '8px 10px', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13 }}
                 onMouseDown={e => e.preventDefault()}
@@ -116,10 +137,11 @@ export function VendorSelect({ value, onChange, vendors = [], onVendorsChange })
               </button>
             </div>
           ))}
-          {!exact && (q || value || '').trim() && (
+          {showAdd && (
             <button type="button"
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 0, borderTop: '1px solid #f1f5f9', background: '#f8fafc', cursor: 'pointer', fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 0, borderTop: '1px solid #f1f5f9', background: hi === filtered.length ? '#dbeafe' : '#f8fafc', cursor: 'pointer', fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}
               onMouseDown={e => e.preventDefault()}
+              onMouseEnter={() => setHi(filtered.length)}
               onClick={addNew}>
               + Add vendor "{(q || value || '').trim()}"
             </button>

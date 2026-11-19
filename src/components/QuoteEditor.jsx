@@ -125,7 +125,7 @@ export function QuoteEditor({
   }
 
   return (
-    <div className="card quote-editor" style={{ marginBottom: 16, padding: 14, maxWidth: '100%', overflowX: 'hidden' }}>
+    <div className="card quote-editor" style={{ marginBottom: 16, padding: 14, maxWidth: '100%', paddingBottom: 72 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>
           {mode === 'revise' ? `Revise ${baseQuote?.quotation_no || ''} → next version` : 'New quotation'}
@@ -350,9 +350,9 @@ export function QuoteEditor({
       </div>
 
       <div style={{
-        position: 'sticky', bottom: 0, zIndex: 40, fontSize: 13, padding: '12px 14px',
-        background: '#fffbeb', borderRadius: 10, border: '1px solid #fcd34d',
-        boxShadow: '0 -4px 16px rgba(15,23,42,0.12)', marginBottom: 12,
+        position: 'fixed', bottom: 12, left: 12, right: 12, zIndex: 120, fontSize: 13, padding: '12px 16px',
+        background: '#fffbeb', borderRadius: 12, border: '2px solid #f59e0b',
+        boxShadow: '0 8px 28px rgba(15,23,42,0.22)', maxWidth: 920, margin: '0 auto',
         display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center',
       }}>
         <div>

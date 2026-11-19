@@ -69,7 +69,7 @@ export function QuoteEditor({
     const sell = Math.round(unitTP * (1 + (Number.isNaN(pct) ? 0 : pct) / 100) * 100) / 100
     return (
       <div key={u.id} style={{
-        display: 'grid', gridTemplateColumns: '28px 1.2fr 0.9fr 1fr 0.55fr 0.75fr 0.7fr 0.75fr 32px',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
         gap: 8, alignItems: 'end', marginBottom: 6, padding: '8px 8px',
         background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8,
       }}>
@@ -84,12 +84,7 @@ export function QuoteEditor({
         </div>
         <div>
           <MiniLabel>Vendor</MiniLabel>
-          <VendorSelect
-            value={u.vendor || ''}
-            onChange={name => setItem(u.id, 'vendor', name)}
-            vendors={vendorList}
-            onVendorsChange={setVendorList}
-          />
+          <VendorSelect value={u.vendor || ''} onChange={name => setItem(u.id, 'vendor', name)} vendors={vendorList} onVendorsChange={setVendorList} />
         </div>
         <div>
           <MiniLabel>Qty / base</MiniLabel>
@@ -130,13 +125,15 @@ export function QuoteEditor({
   }
 
   return (
-    <div className="card" style={{ marginBottom: 16, padding: 14, maxWidth: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+    <div className="card quote-editor" style={{ marginBottom: 16, padding: 14, maxWidth: '100%', overflowX: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>
           {mode === 'revise' ? `Revise ${baseQuote?.quotation_no || ''} → next version` : 'New quotation'}
         </div>
-        <div style={{ fontSize: 13, padding: '8px 14px', background: '#0f172a', color: '#f8fafc', borderRadius: 8, fontWeight: 700 }}>
-          Live total · Transfer ₹{money(xferTot)} · Customer ₹{money(custTot)} · Margin {mgn.pct}% (₹{money(Math.round(mgn.amount || 0))})
+        <div style={{ fontSize: 12, padding: '8px 12px', background: '#0f172a', color: '#f8fafc', borderRadius: 8, fontWeight: 700, lineHeight: 1.4, maxWidth: '100%' }}>
+          <div>Transfer ₹{money(xferTot)}</div>
+          <div>Customer ₹{money(custTot)}</div>
+          <div>Margin {mgn.pct}% (₹{money(Math.round(mgn.amount || 0))})</div>
         </div>
       </div>
 
@@ -147,7 +144,7 @@ export function QuoteEditor({
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
         <div>
           <MiniLabel>Validity date</MiniLabel>
           <input className="input" type="date" value={form.validity_date || ''} onChange={e => setForm(f => ({ ...f, validity_date: e.target.value }))} />
@@ -192,7 +189,7 @@ export function QuoteEditor({
             marginBottom: 10,
             background: isA ? '#eff6ff' : '#fffbeb',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: isA ? '#1d4ed8' : '#b45309' }}>Line {pIdx + 1} · Base product</div>
               <button type="button" className="btn" style={{ fontSize: 12, color: '#991b1b', borderColor: '#fecaca' }}
                 onClick={() => removeItem(prod.id)} title="Remove this base product and all its upgrades">
@@ -200,7 +197,7 @@ export function QuoteEditor({
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1.5fr 1.3fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
               <div>
                 <MiniLabel>SL</MiniLabel>
                 <div style={{ fontWeight: 700, paddingTop: 8 }}>{pIdx + 1}</div>
@@ -215,12 +212,7 @@ export function QuoteEditor({
               </div>
               <div>
                 <MiniLabel>Vendor (procurement)</MiniLabel>
-                <VendorSelect
-                  value={prod.vendor || ''}
-                  onChange={name => setItem(prod.id, 'vendor', name)}
-                  vendors={vendorList}
-                  onVendorsChange={setVendorList}
-                />
+                <VendorSelect value={prod.vendor || ''} onChange={name => setItem(prod.id, 'vendor', name)} vendors={vendorList} onVendorsChange={setVendorList} />
               </div>
             </div>
 
@@ -236,7 +228,7 @@ export function QuoteEditor({
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, marginBottom: 8 }}>
               <div>
                 <MiniLabel>Qty (base units)</MiniLabel>
                 <input className="input" type="number" value={prod.quantity ?? 1} onChange={e => setItem(prod.id, 'quantity', e.target.value)} />
@@ -291,7 +283,7 @@ export function QuoteEditor({
 
       {charges.map(c => (
         <div key={c.id} style={{
-          display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.7fr 0.9fr 0.9fr 36px',
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
           gap: 8, marginBottom: 8, padding: 10, border: '1px solid #e2e8f0', borderRadius: 10, alignItems: 'end',
         }}>
           <div>
@@ -300,12 +292,7 @@ export function QuoteEditor({
           </div>
           <div>
             <MiniLabel>Vendor</MiniLabel>
-            <VendorSelect
-              value={c.vendor || ''}
-              onChange={name => setItem(c.id, 'vendor', name)}
-              vendors={vendorList}
-              onVendorsChange={setVendorList}
-            />
+            <VendorSelect value={c.vendor || ''} onChange={name => setItem(c.id, 'vendor', name)} vendors={vendorList} onVendorsChange={setVendorList} />
           </div>
           <div>
             <MiniLabel>Qty</MiniLabel>
@@ -379,7 +366,7 @@ export function QuoteEditor({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn primary" disabled={saving} onClick={onSave}>
           {saving ? 'Saving…' : (mode === 'revise' ? 'Save as next version' : 'Save quotation')}

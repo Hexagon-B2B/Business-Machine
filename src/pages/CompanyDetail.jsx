@@ -166,28 +166,46 @@ export default function CompanyDetail({ id, go, access }) {
     e.preventDefault()
     setSaving(true)
     const meta = { ...(company.metadata || {}), locations: eForm.locations || [] }
-    // DB columns: employee_count (not employees), gst_no (not gst). Form still uses employees/gst labels.
-    const empVal = eForm.employees === '' || eForm.employees == null ? null : Number(eForm.employees)
+    // Form uses "employees" / "gst" labels; DB columns are employee_count / gst_no only.
+    // Never write "employees" or "gst" — those columns do not exist.
+    const empRaw = eForm.employees
+    const empVal = empRaw === '' || empRaw == null ? null : Number(empRaw)
     const payload = {
-      name: eForm.name, legal_name: eForm.legal_name || null, short_name: eForm.short_name || null,
-      address: eForm.address || null, city: eForm.city || null, pincode: eForm.pincode || null, country: eForm.country || null,
-      hq: eForm.hq || null, board_no: eForm.board_no || null,
+      name: eForm.name,
+      legal_name: eForm.legal_name || null,
+      short_name: eForm.short_name || null,
+      address: eForm.address || null,
+      city: eForm.city || null,
+      pincode: eForm.pincode || null,
+      country: eForm.country || null,
+      hq: eForm.hq || null,
+      board_no: eForm.board_no || null,
       employee_count: empVal != null && !Number.isNaN(empVal) ? empVal : null,
-      gst_no: eForm.gst || null, website: eForm.website || null, email: eForm.email || null,
-      industry: eForm.industry || null, notes: eForm.notes || null, metadata: meta,
+      gst_no: eForm.gst || null,
+      website: eForm.website || null,
+      email: eForm.email || null,
+      industry: eForm.industry || null,
+      notes: eForm.notes || null,
+      metadata: meta,
     }
     let { error } = await supabase.from('companies').update(payload).eq('id', id)
-    // Fallbacks if schema uses alternate names on some envs
-    if (error && /employee_count|schema cache/i.test(error.message)) {
-      delete payload.employee_count
-      payload.employees = empVal != null && !Number.isNaN(empVal) ? empVal : null
+
+    // If a specific optional column is missing, drop ONLY that column and retry.
+    // Do not substitute invalid column names (employees / gst).
+    async function dropColAndRetry(col) {
+      if (!error || !String(error.message || '').includes(col)) return
+      delete payload[col]
       ;({ error } = await supabase.from('companies').update(payload).eq('id', id))
     }
-    if (error && /gst_no|schema cache/i.test(error.message)) {
-      delete payload.gst_no
-      payload.gst = eForm.gst || null
-      ;({ error } = await supabase.from('companies').update(payload).eq('id', id))
-    }
+    await dropColAndRetry('employee_count')
+    await dropColAndRetry('gst_no')
+    await dropColAndRetry('hq')
+    await dropColAndRetry('short_name')
+    await dropColAndRetry('board_no')
+    await dropColAndRetry('pincode')
+    await dropColAndRetry('industry')
+    await dropColAndRetry('country')
+
     setSaving(false)
     if (error) alert(error.message); else { setShowEdit(false); load(); showFlash('Company updated') }
   }

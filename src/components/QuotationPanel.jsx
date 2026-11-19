@@ -6,6 +6,7 @@ import {
   formatQuoteForExcel, customerQuoteNo, downloadQuotePdf, openQuotePrintWindow, DEFAULT_TAX_PCT,
 } from '../lib/quotations'
 import { QuoteEditor } from './QuoteEditor'
+import QuotationExpandedPreview from './QuotationExpandedPreview'
 import { HEXAGON_LOGO_DATA_URL, HEXAGON_PARTNERS_DATA_URL, HEXAGON_SIGNATURE_DATA_URL, QUOTE_SIGNATORY } from '../lib/brandAssets'
 
 function blankForm() {
@@ -348,7 +349,7 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontWeight: 700, fontSize: 14 }}>Quotations</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn primary" onClick={startHeaderAction}>
             {quotes.length ? 'Revise latest quote' : '+ Create quote'}
           </button>
@@ -376,12 +377,19 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
             const open = expandedId === q.id
             return (
             <div key={q.id} className="card" style={{ padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => setExpandedId(open ? null : q.id)}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }}
+                onClick={() => setExpandedId(open ? null : q.id)}
+              >
                 <div>
                   <strong>{customerQuoteNo(q)}</strong>
                   <span style={{ marginLeft: 8, color: '#64748b', fontSize: 12 }}>v{q.version || 1}</span>
                   <span style={{ marginLeft: 8 }}><Badge>{q.status || 'draft'}</Badge></span>
-                  <div style={{ fontSize: 13, marginTop: 4 }}>Customer ₹{(q.total_value || 0).toLocaleString('en-IN')}</div>
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#2563eb' }}>{open ? 'Hide preview ▲' : 'Preview ▼'}</span>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>
+                    Customer ₹{(q.total_value || 0).toLocaleString('en-IN')}
+                    {q.revision_reason ? <span style={{ color: '#64748b' }}> · {q.revision_reason}</span> : null}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
                   <button type="button" className="btn primary" style={{ fontSize: 12 }} onClick={() => exportPdf(q)}>Export PDF</button>
@@ -394,10 +402,13 @@ export default function QuotationPanel({ opportunity, onTotalChange }) {
                   )}
                 </div>
               </div>
+              {open && <QuotationExpandedPreview q={q} />}
             </div>
             )
           })}
-          {!quotes.length && <div className="empty" style={{ padding: 16 }}>No quotations yet — create one above.</div>}
+          {!quotes.length && !mode && (
+            <div className="empty" style={{ padding: 20 }}>No quotations yet. Create the first quote for this deal.</div>
+          )}
         </div>
       )}
 
